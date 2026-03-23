@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audiovisual Playground</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&display=swap');
+        
+        body {
+            margin: 0; padding: 0; overflow: hidden;
+            background-color: #050505; color: white;
+            font-family: 'Space Grotesk', sans-serif;
+            user-select: none; touch-action: none;
+        }
+
+        #mode-btn {
+            position: absolute; top: 20px; left: 20px;
+            width: 50px; height: 50px; border-radius: 50%;
+            background: rgba(15, 15, 20, 0.8); border: 2px solid #fff;
+            color: white; display: flex; align-items: center; justify-content: center;
+            cursor: pointer; z-index: 20; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        #mode-btn:hover { transform: rotate(45deg) scale(1.15); }
+        #mode-btn svg { width: 24px; height: 24px; }
+        
+        .mode-dot { position: absolute; width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.2); transition: all 0.3s; }
+
+        #icon-panel {
+            position: absolute; display: none; flex-direction: column; gap: 10px;
+            background: rgba(15, 15, 20, 0.85); backdrop-filter: blur(10px);
+            padding: 12px; border-radius: 24px; border: 1px solid rgba(255,255,255,0.1);
+            transform: translate(40px, -50%); pointer-events: auto; z-index: 20;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        
+        .icon-row { display: flex; align-items: center; gap: 8px; justify-content: center; }
+        .icon-btn {
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+            color: white; width: 40px; height: 40px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s;
+        }
+        .icon-btn:hover { background: rgba(255,255,255,0.2); transform: scale(1.1); }
+        .icon-btn:active { transform: scale(0.95); }
+        .icon-btn svg { width: 20px; height: 20px; stroke-width: 2.5; }
+        .icon-display { width: 30px; display: flex; justify-content: center; color: rgba(255,255,255,0.6); }
+        .icon-display svg { width: 22px; height: 22px; stroke-width: 2; }
+
+        canvas { display: block; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+</head>
+<body>
+    <div id="mode-btn" title="Cycle Mode">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="4"></circle>
+            <path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32l1.41-1.41"></path>
+        </svg>
+        <div class="mode-dot" style="top: 4px; left: 22px;"></div>
+        <div class="mode-dot" style="top: 14px; left: 40px;"></div>
+        <div class="mode-dot" style="top: 38px; left: 34px;"></div>
+        <div class="mode-dot" style="top: 38px; left: 10px;"></div>
+        <div class="mode-dot" style="top: 14px; left: 4px;"></div>
+    </div>
+
+    <div id="icon-panel">
+        <div class="icon-row">
+            <button class="icon-btn" id="btn-k-minus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
+            <div class="icon-display"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3" fill="currentColor"></circle><circle cx="12" cy="12" r="10"></circle></svg></div>
+            <button class="icon-btn" id="btn-k-plus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
+        </div>
+        <div class="icon-row">
+            <button class="icon-btn" id="btn-n-minus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
+            <div class="icon-display"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="12 2 22 20 2 20"></polygon></svg></div>
+            <button class="icon-btn" id="btn-n-plus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
+        </div>
+    </div>
+
+    <script>
+        // --- 5-STAGE COMPOSITION DATA ---
+        const MODES = [
+            { name: "Mist",      color: '#a8e6cf', bg: [15, 25, 25] },
+            { name: "Aria",      color: '#00ffcc', bg: [10, 20, 30] },
+            { name: "Bloom",     color: '#ffaaa5', bg: [30, 15, 25] },
+            { name: "Drop",      color: '#ff0055', bg: [10, 5, 15] },
+            { name: "Afterglow", color: '#9900ff', bg: [15, 10, 30] }
+        ];
+
+        // Each instrument maps to a gain key for mode-dependent mixing
+        // role -> gainKey mapping
+        const ROLE_GAIN_KEY = {
+            kick:    'kick',
+            hat:     'hat',
+            snare:   'snare',
+            openhat: 'openhat',
+            rim:     'rim',
+            bass:    'bass',
+            sub:     'sub',
+            melody:  'solo',
+            reply:   'reply',
+            arp:     'arp',
+            prism:   'prism',
+            bloom:   'bloom',
+            ghost:   'ghost',
+            pad:     'pad',
+            pulse:   'pulse'
+        };
+
+        const GAINS = {
+            solo:    [0.16, 0.30, 0.24, 0.12, 0.18],
+            reply:   [0.08, 0.14, 0.16, 0.12, 0.10],
+            pad:     [0.10, 0.12, 0.16, 0.12, 0.14],
+            pulse:   [0.00, 0.00, 0.08, 0.10, 0.04],
+            sub:     [0.00, 0.00, 0.04, 0.18, 0.06],
+            bass:    [0.00, 0.00, 0.08, 0.24, 0.08],
+            prism:   [0.00, 0.00, 0.03, 0.18, 0.06],
+            bloom:   [0.00, 0.00, 0.08, 0.12, 0.04],
+            kick:    [0.00, 0.00, 0.04, 0.12, 0.02],
+            hat:     [0.00, 0.00, 0.02, 0.08, 0.02],
+            snare:   [0.00, 0.05, 0.12, 0.20, 0.04],
+            openhat: [0.00, 0.00, 0.10, 0.24, 0.08],
+            rim:     [0.00, 0.16, 0.12, 0.34, 0.08],
+            arp:     [0.00, 0.04, 0.10, 0.15, 0.05],
+            ghost:   [0.12, 0.08, 0.05, 0.02, 0.10]
+        };
+
+        const CUTOFFS = {
+            solo: [1400, 1900, 2200, 1800, 1500],
+            bass: [700, 900, 1100, 1500, 900]
+        };
+
+        const NOTES = {
+            solo:  ["E5", "F#5", "G5", "A5", "B5", "D5"],
+            reply: ["B4", "D5", "E5", "F#5", "G5", "D5"],
+            pad:   ["E4", "G4", "A4", "B4", "D4", "F#4"],
+            sub:   ["E1", "G1", "A1"],
+            bass:  ["E2", "G2", "A2", "B2", "F#2"],
+            prism: ["B4", "D5", "F#5", "G5", "A5", "B5", "D6", "F#6"],
+            bloom: ["E5", "F#5", "G5", "B5"],
+            arp:   ["E5", "G5", "A5", "G5", "E5", "D5", "C5", "D5"]
+        };
+
+        const INSTRUMENTS = [
+            'kick', 'hat', 'snare', 'openhat', 'rim',
+            'bass', 'sub',
+            'melody', 'reply', 'arp', 'prism', 'bloom',
+            'ghost', 'pulse'
+        ];
+
+        const CHAR_ACTIONS = ['move', 'mute', 'delete'];
+
+        let currentMode = 0;
+        let isAudioInitialized = false;
+
+        const nodes = {};
+        const synths = {};
+
+        async function initAudio() {
+            await Tone.start();
+            const master = new Tone.Gain(1).toDestination();
+
+            Object.keys(GAINS).forEach(key => {
+                nodes[key] = new Tone.Gain(GAINS[key][currentMode]).connect(master);
+            });
+
+            // Effects
+            const soloReverb = new Tone.Reverb(3).connect(nodes.solo);
+            const replyReverb = new Tone.Reverb(4).connect(nodes.reply);
+            const padReverb = new Tone.Reverb(6).connect(nodes.pad);
+            const prismDelay = new Tone.FeedbackDelay("8n", 0.3).connect(nodes.prism);
+            const prismReverb = new Tone.Reverb(2).connect(prismDelay);
+            const bassReverb = new Tone.Reverb(1).connect(nodes.bass);
+            const ghostDelay = new Tone.FeedbackDelay("4n", 0.6).connect(nodes.ghost);
+            const ghostReverb = new Tone.Reverb(8).connect(ghostDelay);
+            const arpDelay = new Tone.FeedbackDelay("16n", 0.4).connect(nodes.arp);
+            const bloomDelay = new Tone.FeedbackDelay("8n", 0.25).connect(nodes.bloom);
+            const bloomReverb = new Tone.Reverb(3).connect(bloomDelay);
+            const rimDelay = new Tone.FeedbackDelay("4n", 0.35).connect(nodes.rim);
+
+            // Filters
+            nodes.soloFilter = new Tone.Filter(CUTOFFS.solo[currentMode], "lowpass").connect(soloReverb);
+            nodes.bassFilter = new Tone.Filter(CUTOFFS.bass[currentMode], "lowpass").connect(bassReverb);
+            const replyFilter = new Tone.Filter(1600, "lowpass").connect(replyReverb);
+            const padFilter = new Tone.Filter(1000, "lowpass").connect(padReverb);
+            const prismFilter = new Tone.Filter(2600, "lowpass").connect(prismReverb);
+            const subFilter = new Tone.Filter(300, "lowpass").connect(nodes.sub);
+            const ghostFilter = new Tone.Filter(1800, "lowpass").connect(ghostReverb);
+            const arpFilter = new Tone.Filter(2500, "lowpass").connect(arpDelay);
+            const bloomFilter = new Tone.Filter(1600, "lowpass").connect(bloomReverb);
+
+            // Synths
+            synths.solo = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "triangle" }, envelope: { attack: 0.05, release: 1 } }).connect(nodes.soloFilter);
+            synths.reply = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "triangle" }, envelope: { attack: 0.04, release: 0.8 } }).connect(replyFilter);
+            synths.pad = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "sawtooth" }, envelope: { attack: 0.5, release: 2 } }).connect(padFilter);
+            synths.sub = new Tone.Synth({ oscillator: { type: "triangle" }, envelope: { attack: 0.1, release: 1 } }).connect(subFilter);
+            synths.bass = new Tone.Synth({ oscillator: { type: "sawtooth" }, envelope: { attack: 0.05, release: 0.5 } }).connect(nodes.bassFilter);
+            synths.prism = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "square" }, envelope: { attack: 0.01, release: 0.2 } }).connect(prismFilter);
+            synths.pulse = new Tone.Synth({ oscillator: { type: "square" }, envelope: { attack: 0.01, release: 0.1 } }).connect(nodes.pulse);
+            synths.bloom = new Tone.PolySynth(Tone.Synth, { oscillator: { type: "square" }, envelope: { attack: 0.01, release: 0.15 } }).connect(bloomFilter);
+            synths.arp = new Tone.Synth({ oscillator: { type: "square" }, envelope: { attack: 0.01, decay: 0.1, sustain: 0 } }).connect(arpFilter);
+            synths.ghost = new Tone.NoiseSynth({ noise: { type: 'pink' }, envelope: { attack: 0.05, decay: 0.4, sustain: 0 } }).connect(ghostFilter);
+            
+            // Percussion
+            synths.kick = new Tone.MembraneSynth({ pitchDecay: 0.05, octaves: 4, envelope: { attack: 0.001, decay: 0.4, sustain: 0.01, release: 1.4 } }).connect(nodes.kick);
+            synths.hat = new Tone.MetalSynth({ frequency: 200, envelope: { attack: 0.001, decay: 0.1, release: 0.01 }, harmonicity: 5.1, modulationIndex: 32, resonance: 4000, octaves: 1.5 }).connect(nodes.hat);
+            synths.snare = new Tone.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.005, decay: 0.2, sustain: 0 } }).connect(nodes.snare);
+            synths.openhat = new Tone.MetalSynth({ frequency: 300, envelope: { attack: 0.001, decay: 0.3, release: 0.1 }, harmonicity: 3.5, modulationIndex: 20, resonance: 6000, octaves: 2 }).connect(nodes.openhat);
+            synths.rim = new Tone.MembraneSynth({ pitchDecay: 0.008, octaves: 2, envelope: { attack: 0.001, decay: 0.05, sustain: 0, release: 0.1 } }).connect(rimDelay);
+            synths.rim.volume.value = 4;
+
+            Tone.Transport.bpm.value = 126;
+
+            Tone.Transport.scheduleRepeat((time) => {
+                Tone.Draw.schedule(() => { if (stepCount % 4 === 0) hub.pulse = 20; }, time);
+                characters.forEach(c => {
+                    if (c.active && c.sequence[stepCount % c.n] === 1) {
+                        c.playSound(time, stepCount);
+                        Tone.Draw.schedule(() => { c.pulse(); }, time);
+                    }
+                });
+                stepCount++;
+            }, "16n");
+
+            Tone.Transport.start();
+            isAudioInitialized = true;
+            setMode(0);
+        }
+
+        function isRoleAvailable(role) {
+            let gainKey = ROLE_GAIN_KEY[role];
+            if (!gainKey || !GAINS[gainKey]) return true;
+            return GAINS[gainKey][currentMode] > 0;
+        }
+
+        function setMode(m) {
+            currentMode = m % 5;
+            Object.keys(GAINS).forEach(key => { nodes[key].gain.rampTo(GAINS[key][currentMode] * 2, 1); });
+            nodes.soloFilter.frequency.rampTo(CUTOFFS.solo[currentMode], 1);
+            nodes.bassFilter.frequency.rampTo(CUTOFFS.bass[currentMode], 1);
+
+            // Auto-mute characters whose gain is 0, auto-unmute if gain > 0 (unless manually muted)
+            characters.forEach(c => {
+                let gainKey = ROLE_GAIN_KEY[c.role];
+                if (gainKey && GAINS[gainKey]) {
+                    let g = GAINS[gainKey][currentMode];
+                    if (g <= 0) {
+                        c.active = false;
+                        c.autoMuted = true;
+                    } else if (c.autoMuted) {
+                        c.active = true;
+                        c.autoMuted = false;
+                    }
+                }
+            });
+
+            updateUI();
+        }
+
+        // --- VISUAL SETUP (p5.js) ---
+        let particles = []; let ripples = []; let bgFlashes = []; let characters = [];
+        let stepCount = 0; let selectedCharacter = null;
+        const hub = { x: 0, y: 0, radius: 50, pulse: 0 };
+
+        let gestureState = {
+            active: false, type: null, startX: 0, startY: 0, target: null, currentAngle: 0, distance: 0
+        };
+
+        function setup() {
+            createCanvas(windowWidth, windowHeight);
+            noStroke();
+            hub.x = width / 2; hub.y = height / 2;
+
+            characters.push(new Character('melody', width/2, height/2 - 120, 5, 16));
+            characters.push(new Character('ghost', width/2 + 100, height/2 + 100, 2, 16));
+
+            setupUI();
+            updateUI();
+        }
+
+        function draw() {
+            let bg = MODES[currentMode].bg;
+            background(bg[0], bg[1], bg[2], 60);
+
+            for (let i = bgFlashes.length - 1; i >= 0; i--) {
+                let f = bgFlashes[i]; fill(f.color[0], f.color[1], f.color[2], f.alpha); rect(0, 0, width, height);
+                f.alpha -= f.decay; if (f.alpha <= 0) bgFlashes.splice(i, 1);
+            }
+
+            // Hub
+            hub.x = width / 2; hub.y = height / 2;
+            push(); translate(hub.x, hub.y);
+            noFill(); strokeWeight(2); stroke(255, 100); ellipse(0, 0, hub.radius * 2 + hub.pulse);
+            fill(255, 20); ellipse(0, 0, hub.radius * 2);
+            stroke(255); strokeWeight(3); line(-10, 0, 10, 0); line(0, -10, 0, 10);
+            if (hub.pulse > 0) hub.pulse *= 0.9;
+            pop();
+
+            for (let i = ripples.length - 1; i >= 0; i--) {
+                let r = ripples[i]; noFill(); strokeWeight(r.weight); stroke(r.c[0], r.c[1], r.c[2], r.alpha);
+                ellipse(r.x, r.y, r.size); r.size += r.speed; r.alpha -= r.decay; r.weight *= 0.95;
+                if (r.alpha <= 0) ripples.splice(i, 1);
+            }
+            noStroke();
+
+            characters.forEach(c => { c.update(); c.display(); });
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i]; fill(p.c[0], p.c[1], p.c[2], p.alpha);
+                push(); translate(p.x, p.y); rotate(p.rotation);
+                if (p.shape === 'circle') ellipse(0, 0, p.size);
+                else if (p.shape === 'rect') rect(-p.size/2, -p.size/2, p.size, p.size);
+                else if (p.shape === 'triangle') triangle(-p.size/2, p.size/2, p.size/2, p.size/2, 0, -p.size/2);
+                pop();
+                p.x += p.vx; p.y += p.vy; p.vy += 0.05; p.rotation += p.vr; p.alpha -= p.decay; p.size *= 0.98;
+                if (p.alpha <= 0 || p.size < 0.5) particles.splice(i, 1);
+            }
+
+            drawGestures();
+
+            if (selectedCharacter && !gestureState.active) {
+                const panel = document.getElementById('icon-panel');
+                let targetX = selectedCharacter.x; let targetY = selectedCharacter.y;
+                if (targetX > width - 150) targetX = selectedCharacter.x - 120;
+                if (targetY < 100) targetY = 100; if (targetY > height - 100) targetY = height - 100;
+                panel.style.left = targetX + 'px'; panel.style.top = targetY + 'px';
+            } else {
+                document.getElementById('icon-panel').style.display = 'none';
+            }
+        }
+
+        function drawGestures() {
+            if (!gestureState.active) return;
+            
+            gestureState.distance = dist(gestureState.startX, gestureState.startY, mouseX, mouseY);
+            gestureState.currentAngle = atan2(mouseY - gestureState.startY, mouseX - gestureState.startX);
+            if (gestureState.currentAngle < 0) gestureState.currentAngle += TWO_PI;
+
+            push();
+            translate(gestureState.startX, gestureState.startY);
+
+            if (gestureState.type === 'hub_dial') {
+                let numItems = INSTRUMENTS.length;
+                let angleStep = TWO_PI / numItems;
+                let selectedIndex = floor((gestureState.currentAngle + angleStep/2) / angleStep) % numItems;
+                let ringRadius = 110;
+                
+                // Background ring
+                noFill(); stroke(255, 30); strokeWeight(2); ellipse(0, 0, ringRadius * 2);
+
+                for (let i = 0; i < numItems; i++) {
+                    let a = i * angleStep;
+                    let px = cos(a) * ringRadius; let py = sin(a) * ringRadius;
+                    let role = INSTRUMENTS[i];
+                    let available = isRoleAvailable(role);
+                    let isSelected = (i === selectedIndex && gestureState.distance > 40);
+                    
+                    noStroke();
+
+                    if (!available) {
+                        // Greyed out
+                        fill(40, 40, 40, 180);
+                        ellipse(px, py, 10);
+                        if (isSelected) {
+                            fill(80); textAlign(CENTER, CENTER); textSize(11);
+                            let lx = cos(a) * (ringRadius + 30); let ly = sin(a) * (ringRadius + 30);
+                            text(role.toUpperCase(), lx, ly);
+                            // Strikethrough line
+                            stroke(80); strokeWeight(1);
+                            line(lx - 20, ly, lx + 20, ly);
+                        }
+                    } else {
+                        fill(isSelected ? '#00ffcc' : 80);
+                        ellipse(px, py, isSelected ? 24 : 12);
+                        
+                        if (isSelected) {
+                            fill(255); textAlign(CENTER, CENTER); textSize(12);
+                            let lx = cos(a) * (ringRadius + 28); let ly = sin(a) * (ringRadius + 28);
+                            text(role.toUpperCase(), lx, ly);
+                        }
+                    }
+                }
+                
+                stroke(255, 80); strokeWeight(1.5);
+                line(0, 0, mouseX - gestureState.startX, mouseY - gestureState.startY);
+
+            } else if (gestureState.type === 'char_action') {
+                let numItems = CHAR_ACTIONS.length;
+                let angleStep = TWO_PI / numItems;
+                let selectedIndex = floor((gestureState.currentAngle + angleStep/2) / angleStep) % numItems;
+                
+                noFill(); stroke(255, 30); strokeWeight(2); ellipse(0, 0, 120);
+
+                for (let i = 0; i < numItems; i++) {
+                    let a = i * angleStep;
+                    let px = cos(a) * 60; let py = sin(a) * 60;
+                    let isSelected = (i === selectedIndex && gestureState.distance > 30);
+                    let actColor = CHAR_ACTIONS[i] === 'delete' ? '#ff0055' : CHAR_ACTIONS[i] === 'mute' ? '#ffcc00' : '#ffffff';
+
+                    fill(isSelected ? actColor : 50); noStroke();
+                    ellipse(px, py, isSelected ? 20 : 10);
+                    
+                    if (isSelected) {
+                        fill(actColor); textAlign(CENTER, CENTER); textSize(12);
+                        let lx = cos(a) * 90; let ly = sin(a) * 90;
+                        text(CHAR_ACTIONS[i].toUpperCase(), lx, ly);
+                    }
+                }
+
+                if (CHAR_ACTIONS[selectedIndex] === 'move' && gestureState.distance > 30) {
+                    gestureState.target.tx = mouseX; gestureState.target.ty = mouseY;
+                    stroke(255, 80); strokeWeight(1.5);
+                    line(0, 0, mouseX - gestureState.startX, mouseY - gestureState.startY);
+                }
+            }
+            pop();
+        }
+
+        function windowResized() { resizeCanvas(windowWidth, windowHeight); }
+
+        async function mousePressed(event) {
+            if (event.target.tagName !== 'CANVAS') return;
+            
+            // Auto-init audio on first canvas interaction
+            if (!isAudioInitialized) {
+                await initAudio();
+            }
+            
+            gestureState.startX = mouseX; gestureState.startY = mouseY; gestureState.distance = 0;
+            
+            if (dist(mouseX, mouseY, hub.x, hub.y) < hub.radius) {
+                gestureState.active = true; gestureState.type = 'hub_dial'; gestureState.target = hub;
+                selectCharacter(null); return;
+            }
+            
+            for (let i = characters.length - 1; i >= 0; i--) {
+                let c = characters[i];
+                if (dist(mouseX, mouseY, c.x, c.y) < c.baseSize + 30) {
+                    gestureState.active = true; gestureState.type = 'char_action'; gestureState.target = c;
+                    selectCharacter(c); return;
+                }
+            }
+
+            selectCharacter(null);
+            triggerPad(mouseX, mouseY, false);
+        }
+
+        function mouseDragged(event) {
+            if (!isAudioInitialized) return;
+            if (event.target.tagName !== 'CANVAS') return;
+            if (!gestureState.active) {
+                if (frameCount % 8 === 0) triggerPad(mouseX, mouseY, true);
+            }
+        }
+
+        function mouseReleased() {
+            if (gestureState.active) {
+                if (gestureState.distance > 30) {
+                    if (gestureState.type === 'hub_dial') {
+                        let numItems = INSTRUMENTS.length;
+                        let angleStep = TWO_PI / numItems;
+                        let selectedIndex = floor((gestureState.currentAngle + angleStep/2) / angleStep) % numItems;
+                        let role = INSTRUMENTS[selectedIndex];
+                        if (isRoleAvailable(role)) {
+                            spawnCharacter(role, mouseX, mouseY);
+                        }
+                    } 
+                    else if (gestureState.type === 'char_action') {
+                        let numItems = CHAR_ACTIONS.length;
+                        let angleStep = TWO_PI / numItems;
+                        let selectedIndex = floor((gestureState.currentAngle + angleStep/2) / angleStep) % numItems;
+                        let action = CHAR_ACTIONS[selectedIndex];
+                        
+                        if (action === 'mute') {
+                            gestureState.target.active = !gestureState.target.active;
+                            gestureState.target.autoMuted = false;
+                        } else if (action === 'delete') {
+                            spawnParticles(gestureState.target.x, gestureState.target.y, gestureState.target.c, 30, 15);
+                            characters = characters.filter(c => c !== gestureState.target);
+                            selectCharacter(null);
+                        }
+                    }
+                } else {
+                    if (gestureState.type === 'hub_dial') {
+                        let available = INSTRUMENTS.filter(r => isRoleAvailable(r));
+                        if (available.length > 0) spawnCharacter(random(available), mouseX + random(-50,50), mouseY + random(-50,50));
+                    }
+                    else if (gestureState.type === 'char_action') {
+                        const panel = document.getElementById('icon-panel');
+                        panel.style.display = 'flex';
+                    }
+                }
+            }
+            gestureState.active = false;
+        }
+
+        function spawnCharacter(role, tx, ty) {
+            let k = role === 'kick' ? 4 : role === 'hat' ? 8 : role === 'bass' ? 3 : role === 'snare' ? 2 : role === 'openhat' ? 2 : role === 'rim' ? 3 : role === 'sub' ? 2 : 5;
+            let c = new Character(role, hub.x, hub.y, k, 16);
+            c.tx = tx; c.ty = ty;
+            characters.push(c); selectCharacter(c);
+            spawnParticles(hub.x, hub.y, c.c, 15, 8); spawnRipples(hub.x, hub.y, c.c, 2);
+        }
+
+        function triggerPad(x, y, isDrag = false) {
+            if (!isAudioInitialized) return;
+            let col = color(MODES[currentMode].color).levels;
+            spawnParticles(x, y, col, isDrag ? 2 : 8, isDrag ? 3 : 8);
+            if (!isDrag) spawnRipples(x, y, col, 1);
+
+            let note = random(NOTES.pad);
+            if (isDrag) synths.pad.triggerAttackRelease(note, "8n");
+            else synths.pad.triggerAttackRelease([note, random(NOTES.pad)], "2n");
+
+            // Only active (not muted) characters follow the swarm
+            characters.forEach(c => {
+                if (c.active && !c.isSelected && !gestureState.active) {
+                    c.tx = x + random(-150, 150); c.ty = y + random(-150, 150);
+                }
+            });
+        }
+
+        function setupUI() {
+            document.getElementById('mode-btn').onclick = () => {
+                if (!isAudioInitialized) return;
+                setMode(currentMode + 1);
+                let col = color(MODES[currentMode].color).levels;
+                bgFlashes.push({ color: col, alpha: 100, decay: 5 });
+            };
+
+            document.getElementById('btn-k-plus').onclick = () => { if(selectedCharacter && selectedCharacter.k < selectedCharacter.n) { selectedCharacter.k++; selectedCharacter.updateEuclidean(); } };
+            document.getElementById('btn-k-minus').onclick = () => { if(selectedCharacter && selectedCharacter.k > 1) { selectedCharacter.k--; selectedCharacter.updateEuclidean(); } };
+            document.getElementById('btn-n-plus').onclick = () => { if(selectedCharacter && selectedCharacter.n < 32) { selectedCharacter.n++; selectedCharacter.updateEuclidean(); } };
+            document.getElementById('btn-n-minus').onclick = () => { if(selectedCharacter && selectedCharacter.n > selectedCharacter.k && selectedCharacter.n > 2) { selectedCharacter.n--; selectedCharacter.updateEuclidean(); } };
+        }
+
+        function updateUI() {
+            const btn = document.getElementById('mode-btn');
+            btn.style.borderColor = MODES[currentMode].color;
+            const dots = document.querySelectorAll('.mode-dot');
+            dots.forEach((dot, i) => {
+                dot.style.background = i === currentMode ? MODES[currentMode].color : 'rgba(255,255,255,0.2)';
+                dot.style.boxShadow = i === currentMode ? `0 0 8px ${MODES[currentMode].color}` : 'none';
+            });
+        }
+
+        function selectCharacter(c) {
+            if (selectedCharacter) selectedCharacter.isSelected = false;
+            selectedCharacter = c;
+            if (c) c.isSelected = true;
+        }
+
+        function spawnParticles(x, y, c, count, maxSpeed) {
+            const shapes = ['circle', 'rect', 'triangle'];
+            for (let i = 0; i < count; i++) {
+                particles.push({
+                    x: x, y: y, vx: random(-maxSpeed, maxSpeed), vy: random(-maxSpeed, maxSpeed),
+                    vr: random(-0.2, 0.2), rotation: random(TWO_PI), size: random(10, 30),
+                    c: c, alpha: 255, decay: random(2, 5), shape: random(shapes)
+                });
+            }
+        }
+
+        function spawnRipples(x, y, c, count) {
+            for (let i = 0; i < count; i++) {
+                ripples.push({ x: x, y: y, size: 10, speed: random(5, 20), weight: random(2, 8), c: c, alpha: 255, decay: random(3, 8) });
+            }
+        }
+
+        // --- CLASSES ---
+        class Character {
+            constructor(role, x, y, k, n) {
+                this.role = role; this.x = x; this.y = y; this.tx = x; this.ty = y;
+                this.baseSize = ['kick','bass','sub'].includes(role) ? 40 : ['melody','reply'].includes(role) ? 32 : 25;
+                this.size = this.baseSize;
+                this.c = color(random(['#ffffff', '#ff0055', '#00ffcc', '#ffcc00', '#9900ff', '#ffaaa5', '#a8e6cf'])).levels;
+                this.active = true; this.autoMuted = false; this.pulseTimer = 0; this.isSelected = false;
+                
+                this.shape = { kick:'rect', hat:'triangle', snare:'hexagon', openhat:'pentagon',
+                               rim:'cross', bass:'ellipse', sub:'circle', melody:'star',
+                               reply:'diamond', arp:'zigzag', prism:'octagon', bloom:'flower',
+                               ghost:'cloud', pulse:'dot', pad:'wave' }[role] || 'circle';
+
+                this.k = k; this.n = n; this.sequence = [];
+                this.updateEuclidean();
+                this.noteIndex = floor(random(10));
+            }
+
+            updateEuclidean() {
+                this.sequence = [];
+                for (let i = 0; i < this.n; i++) {
+                    this.sequence.push((i * this.k) % this.n < this.k ? 1 : 0);
+                }
+            }
+
+            playSound(time, step) {
+                if (this.role === 'kick') synths.kick.triggerAttackRelease("C1", "8n", time);
+                else if (this.role === 'hat') synths.hat.triggerAttackRelease("16n", time);
+                else if (this.role === 'snare') synths.snare.triggerAttackRelease("16n", time);
+                else if (this.role === 'openhat') synths.openhat.triggerAttackRelease("8n", time);
+                else if (this.role === 'rim') synths.rim.triggerAttackRelease("G4", "32n", time);
+                else if (this.role === 'bass') synths.bass.triggerAttackRelease(random(NOTES.bass), "8n", time);
+                else if (this.role === 'sub') synths.sub.triggerAttackRelease(random(NOTES.sub), "4n", time);
+                else if (this.role === 'melody') { synths.solo.triggerAttackRelease(NOTES.solo[this.noteIndex % NOTES.solo.length], "8n", time); this.noteIndex++; }
+                else if (this.role === 'reply') { synths.reply.triggerAttackRelease(NOTES.reply[this.noteIndex % NOTES.reply.length], "8n", time); this.noteIndex++; }
+                else if (this.role === 'arp') { synths.arp.triggerAttackRelease(NOTES.arp[this.noteIndex % NOTES.arp.length], "16n", time); this.noteIndex++; }
+                else if (this.role === 'prism') synths.prism.triggerAttackRelease(random(NOTES.prism), "16n", time);
+                else if (this.role === 'bloom') synths.bloom.triggerAttackRelease(random(NOTES.bloom), "16n", time);
+                else if (this.role === 'ghost') synths.ghost.triggerAttackRelease("8n", time);
+                else if (this.role === 'pulse') synths.pulse.triggerAttackRelease("E4", "16n", time);
+            }
+
+            pulse() {
+                if (this.active) { this.pulseTimer = 15; this.size = this.baseSize * 1.4; spawnRipples(this.x, this.y, this.c, 1); }
+            }
+
+            update() {
+                // Muted characters do NOT move at all (no lerp, no wandering)
+                if (this.active) {
+                    this.x = lerp(this.x, this.tx, 0.05); this.y = lerp(this.y, this.ty, 0.05);
+                    if (!this.isSelected && !gestureState.active && frameCount % 60 === 0 && random() > 0.7) {
+                        this.tx = this.x + random(-40, 40); this.ty = this.y + random(-40, 40);
+                    }
+                }
+                this.tx = constrain(this.tx, 50, width-50); this.ty = constrain(this.ty, 50, height-50);
+                this.size = lerp(this.size, this.baseSize, 0.1);
+                if (this.pulseTimer > 0) this.pulseTimer--;
+            }
+
+            display() {
+                push(); translate(this.x, this.y);
+                
+                let isHovered = dist(mouseX, mouseY, this.x, this.y) < this.baseSize + 30;
+
+                if (this.isSelected || (isHovered && !gestureState.active)) {
+                    let polyRadius = this.baseSize + 25; let angleStep = TWO_PI / this.n;
+                    stroke(this.c[0], this.c[1], this.c[2], this.active ? 50 : 20);
+                    strokeWeight(1);
+                    fill(this.c[0], this.c[1], this.c[2], this.active ? 10 : 5);
+                    beginShape();
+                    for(let i=0; i<this.n; i++) { let a = i * angleStep - HALF_PI; vertex(cos(a) * polyRadius, sin(a) * polyRadius); }
+                    endShape(CLOSE);
+
+                    let localStep = stepCount % this.n;
+                    for(let i=0; i<this.n; i++) {
+                        let a = i * angleStep - HALF_PI; let px = cos(a) * polyRadius; let py = sin(a) * polyRadius;
+                        noStroke();
+                        if (!this.active) fill(30, 30, 30, 100);
+                        else if (this.sequence[i] === 1) fill(this.c[0], this.c[1], this.c[2], 200);
+                        else fill(50, 50, 50, 150);
+                        let nodeSize = (this.active && i === localStep) ? 12 : 6;
+                        if (this.active && i === localStep) fill(255);
+                        ellipse(px, py, nodeSize);
+                    }
+
+                    if (this.isSelected) {
+                        noFill(); stroke(255, 150); strokeWeight(2); drawingContext.setLineDash([5, 5]);
+                        ellipse(0, 0, polyRadius * 2 + 20); drawingContext.setLineDash([]);
+                    }
+                }
+
+                noStroke();
+                let alpha = this.active ? 220 : 80;
+                if (!this.active) fill(60, 60, 60, alpha);
+                else fill(this.c[0], this.c[1], this.c[2], alpha);
+
+                let bounce = (this.active && this.pulseTimer > 0) ? sin(frameCount * 0.5) * 10 : 0;
+                translate(0, bounce);
+
+                this.drawShape();
+
+                // Eyes
+                let eyeAlpha = this.active ? 255 : 30;
+                fill(eyeAlpha);
+                let eyeSize = this.baseSize * 0.25;
+                let eyeOffsetX = constrain((mouseX - this.x) * 0.05, -this.baseSize/4, this.baseSize/4);
+                let eyeOffsetY = constrain((mouseY - this.y) * 0.05, -this.baseSize/4, this.baseSize/4);
+                
+                if (this.active) {
+                    ellipse(-this.baseSize/4 + eyeOffsetX, eyeOffsetY, eyeSize); ellipse(this.baseSize/4 + eyeOffsetX, eyeOffsetY, eyeSize);
+                    fill(0); ellipse(-this.baseSize/4 + eyeOffsetX, eyeOffsetY, eyeSize/2); ellipse(this.baseSize/4 + eyeOffsetX, eyeOffsetY, eyeSize/2);
+                } else {
+                    stroke(40); strokeWeight(2);
+                    line(-this.baseSize/4 - eyeSize/2, 0, -this.baseSize/4 + eyeSize/2, 0);
+                    line(this.baseSize/4 - eyeSize/2, 0, this.baseSize/4 + eyeSize/2, 0); noStroke();
+                }
+                pop();
+            }
+
+            drawShape() {
+                let s = this.size;
+                if (this.shape === 'rect') { rectMode(CENTER); rect(0, 0, s, s, 8); }
+                else if (this.shape === 'ellipse') ellipse(0, 0, s * 1.2, s * 0.8);
+                else if (this.shape === 'circle') ellipse(0, 0, s);
+                else if (this.shape === 'triangle') triangle(-s/2, s/2, s/2, s/2, 0, -s/2);
+                else if (this.shape === 'star') this._star(0, 0, s/3, s/1.5, 5);
+                else if (this.shape === 'hexagon') this._poly(0, 0, s/1.2, 6);
+                else if (this.shape === 'pentagon') this._poly(0, 0, s/1.2, 5);
+                else if (this.shape === 'octagon') this._poly(0, 0, s/1.2, 8);
+                else if (this.shape === 'diamond') { push(); rotate(QUARTER_PI); rectMode(CENTER); rect(0, 0, s*0.8, s*0.8, 4); pop(); }
+                else if (this.shape === 'cloud') {
+                    ellipse(0, 0, s, s*0.6); ellipse(-s*0.3, -s*0.1, s*0.6); ellipse(s*0.3, -s*0.2, s*0.7);
+                }
+                else if (this.shape === 'cross') {
+                    rectMode(CENTER); rect(0, 0, s*0.3, s, 3); rect(0, 0, s, s*0.3, 3);
+                }
+                else if (this.shape === 'zigzag') {
+                    beginShape(); let zw = s*0.6; let zh = s*0.5;
+                    vertex(-zw, zh); vertex(-zw/2, -zh); vertex(0, zh); vertex(zw/2, -zh); vertex(zw, zh);
+                    endShape();
+                }
+                else if (this.shape === 'flower') {
+                    for (let a = 0; a < TWO_PI; a += TWO_PI/5) {
+                        ellipse(cos(a)*s*0.3, sin(a)*s*0.3, s*0.5);
+                    }
+                    ellipse(0, 0, s*0.4);
+                }
+                else if (this.shape === 'dot') {
+                    ellipse(0, 0, s*0.6); noFill(); stroke(this.active ? this.c : [60,60,60]);
+                    strokeWeight(2); ellipse(0, 0, s); noStroke();
+                }
+                else ellipse(0, 0, s);
+            }
+
+            _star(x, y, r1, r2, n) {
+                let a = TWO_PI / n; let h = a / 2; beginShape();
+                for (let i = -PI/2; i < TWO_PI - PI/2; i += a) {
+                    vertex(x + cos(i)*r2, y + sin(i)*r2);
+                    vertex(x + cos(i+h)*r1, y + sin(i+h)*r1);
+                }
+                endShape(CLOSE);
+            }
+
+            _poly(x, y, r, n) {
+                let a = TWO_PI / n; beginShape();
+                for (let i = 0; i < TWO_PI; i += a) vertex(x + cos(i)*r, y + sin(i)*r);
+                endShape(CLOSE);
+            }
+        }
+    </script>
+</body>
+</html>
