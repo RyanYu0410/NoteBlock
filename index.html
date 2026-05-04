@@ -3,506 +3,1744 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Audiovisual Playground</title>
+    <title>Fruit Table — Magic Music</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&display=swap');
-        body { margin:0;padding:0;overflow:hidden;background:#050505;color:#fff;font-family:'Space Grotesk',sans-serif;user-select:none;touch-action:none; }
-        #mode-btn { position:absolute;top:20px;left:20px;width:50px;height:50px;border-radius:50%;background:rgba(15,15,20,0.8);border:2px solid #fff;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:20;transition:all .3s cubic-bezier(.175,.885,.32,1.275);box-shadow:0 4px 15px rgba(0,0,0,.5); }
-        #mode-btn:hover { transform:rotate(45deg) scale(1.15); }
-        #mode-btn svg { width:24px;height:24px; }
-        .mode-dot { position:absolute;width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.2);transition:all .3s; }
-        #icon-panel { position:absolute;display:none;flex-direction:column;gap:10px;background:rgba(15,15,20,.85);backdrop-filter:blur(10px);padding:12px;border-radius:24px;border:1px solid rgba(255,255,255,.1);transform:translate(40px,-50%);pointer-events:auto;z-index:20;box-shadow:0 10px 30px rgba(0,0,0,.5); }
-        .icon-row { display:flex;align-items:center;gap:8px;justify-content:center; }
-        .icon-btn { background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);color:#fff;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s; }
-        .icon-btn:hover { background:rgba(255,255,255,.2);transform:scale(1.1); }
-        .icon-btn:active { transform:scale(.95); }
-        .icon-btn svg { width:20px;height:20px;stroke-width:2.5; }
-        .icon-display { width:30px;display:flex;justify-content:center;color:rgba(255,255,255,.6); }
-        .icon-display svg { width:22px;height:22px;stroke-width:2; }
-        canvas { display:block; }
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&display=swap');
+
+        :root {
+            --panel-bg: rgba(12, 14, 24, 0.72);
+            --panel-border: rgba(255, 255, 255, 0.08);
+            --text: #f4f4ff;
+            --muted: rgba(244, 244, 255, 0.55);
+            --accent: #ffd1e8;
+        }
+
+        * { box-sizing: border-box; }
+        html, body {
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background: #06070d; color: var(--text);
+            font-family: 'Space Grotesk', system-ui, sans-serif;
+            overflow: hidden; user-select: none; touch-action: none;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        canvas { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; display: block; }
+        #bg { z-index: 0; }
+        #fg { z-index: 1; }
+
+        #proc { position: absolute; top: -9999px; left: -9999px; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+        /* ── Splash ─────────────────────────────────────── */
+        #splash {
+            position: fixed; inset: 0; z-index: 100;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            background: radial-gradient(ellipse at center, rgba(40, 24, 80, 0.85), rgba(6, 7, 13, 0.98));
+            backdrop-filter: blur(8px);
+            transition: opacity 0.8s ease;
+        }
+        #splash.hide { opacity: 0; pointer-events: none; }
+        #splash .title {
+            font-size: clamp(48px, 9vw, 110px); font-weight: 700; letter-spacing: -0.03em;
+            background: linear-gradient(135deg, #ff6b9d 0%, #ffb86b 30%, #fff36b 50%, #7bff9d 70%, #bb88ff 100%);
+            -webkit-background-clip: text; background-clip: text; color: transparent;
+            line-height: 0.9; text-align: center;
+        }
+        #splash .subtitle {
+            margin-top: 18px; font-size: 18px; color: var(--muted); letter-spacing: 0.05em; text-align: center; max-width: 560px; padding: 0 24px;
+        }
+        #begin {
+            margin-top: 56px; padding: 18px 44px; border: 0;
+            background: linear-gradient(135deg, #ff6b9d, #bb88ff);
+            color: #fff; font-family: inherit; font-size: 18px; font-weight: 700; letter-spacing: 0.04em;
+            border-radius: 999px; cursor: pointer; box-shadow: 0 10px 40px rgba(187, 136, 255, 0.4);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        #begin:hover { transform: scale(1.05); box-shadow: 0 14px 50px rgba(187, 136, 255, 0.6); }
+        #begin:active { transform: scale(0.98); }
+
+        /* ── Camera Panel (top-left) ────────────────────── */
+        #camera-panel {
+            position: fixed; top: 16px; left: 16px; z-index: 10;
+            background: var(--panel-bg); border: 1px solid var(--panel-border);
+            border-radius: 18px; padding: 12px; min-width: 220px;
+            backdrop-filter: blur(14px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            display: none;
+        }
+        #camera-panel.show { display: block; }
+        #camera-panel .label {
+            font-size: 10px; text-transform: uppercase; letter-spacing: 0.15em;
+            color: var(--muted); margin-bottom: 6px;
+        }
+        #camera-select {
+            width: 100%; background: rgba(255,255,255,0.04); color: var(--text);
+            border: 1px solid var(--panel-border); border-radius: 10px;
+            padding: 8px 10px; font-family: inherit; font-size: 13px; cursor: pointer;
+            outline: none;
+        }
+        #camera-select:focus { border-color: rgba(255,255,255,0.2); }
+        .cam-row {
+            display: flex; align-items: center; gap: 10px;
+            margin-top: 10px; font-size: 12px; color: var(--muted);
+        }
+        .cam-row label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+        .cam-row input[type=checkbox] { accent-color: #bb88ff; cursor: pointer; }
+        #cam-preview {
+            width: 100%; aspect-ratio: 4/3; margin-top: 10px;
+            background: rgba(0,0,0,0.5); border-radius: 10px; object-fit: cover;
+            display: none;
+        }
+        #cam-preview.show { display: block; }
+        #cam-preview.mirror { transform: scaleX(-1); }
+
+        /* ── World/Tempo Panel (top-right) ──────────────── */
+        #world-panel {
+            position: fixed; top: 16px; right: 16px; z-index: 10;
+            background: var(--panel-bg); border: 1px solid var(--panel-border);
+            border-radius: 18px; padding: 12px;
+            backdrop-filter: blur(14px); box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            display: none;
+        }
+        #world-panel.show { display: block; }
+        .world-row { display: flex; gap: 6px; }
+        .world-btn {
+            background: rgba(255,255,255,0.04); border: 1px solid var(--panel-border);
+            color: var(--text); padding: 8px 14px; border-radius: 10px;
+            font-family: inherit; font-size: 12px; font-weight: 700; letter-spacing: 0.06em;
+            cursor: pointer; transition: all 0.2s;
+        }
+        .world-btn:hover { background: rgba(255,255,255,0.08); }
+        .world-btn.active { background: linear-gradient(135deg, #bb88ff, #ff6b9d); border-color: transparent; }
+        .tempo-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+        #tempo { flex: 1; -webkit-appearance: none; appearance: none; height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; outline: none; }
+        #tempo::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; background: #bb88ff; border-radius: 50%; cursor: pointer; }
+        #tempo::-moz-range-thumb { width: 14px; height: 14px; background: #bb88ff; border-radius: 50%; cursor: pointer; border: 0; }
+        #tempo-value { min-width: 28px; text-align: right; font-variant-numeric: tabular-nums; color: var(--text); }
+
+        /* ── Fruit Palette Dock (bottom) ────────────────── */
+        #palette {
+            position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 10;
+            display: none; gap: 12px; padding: 12px 16px;
+            background: var(--panel-bg); border: 1px solid var(--panel-border);
+            border-radius: 22px; backdrop-filter: blur(14px);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+        }
+        #palette.show { display: flex; }
+        .chip {
+            width: 52px; height: 52px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            cursor: grab; transition: transform 0.15s;
+            position: relative;
+        }
+        .chip:hover { transform: scale(1.1); }
+        .chip:active { cursor: grabbing; transform: scale(0.95); }
+        .chip::after {
+            content: attr(data-role);
+            position: absolute; bottom: -18px; left: 50%; transform: translateX(-50%);
+            font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase;
+            color: var(--muted); pointer-events: none; white-space: nowrap;
+        }
+        .chip svg { width: 36px; height: 36px; pointer-events: none; }
+
+        /* ── iPhone button ──────────────────────────────── */
+        .iphone-btn {
+            width: 100%; margin-top: 10px; padding: 10px 12px;
+            background: linear-gradient(135deg, rgba(120,180,255,0.18), rgba(187,136,255,0.20));
+            border: 1px solid rgba(160,200,255,0.32);
+            color: var(--text); cursor: pointer;
+            font-family: inherit; font-size: 13px; font-weight: 700; letter-spacing: 0.04em;
+            border-radius: 12px;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            transition: all 0.2s;
+        }
+        .iphone-btn:hover {
+            background: linear-gradient(135deg, rgba(120,180,255,0.30), rgba(187,136,255,0.32));
+            transform: translateY(-1px);
+            box-shadow: 0 6px 18px rgba(140, 170, 255, 0.18);
+        }
+        .iphone-btn:active { transform: translateY(0); }
+        .iphone-btn.active {
+            background: linear-gradient(135deg, #88aaff, #bb88ff);
+            border-color: transparent;
+        }
+        .iphone-btn .iphone-emoji { font-size: 16px; line-height: 1; }
+
+        /* ── Per-fruit popup ────────────────────────────── */
+        #fruit-popup {
+            position: fixed; z-index: 15;
+            background: var(--panel-bg); border: 1px solid var(--panel-border);
+            border-radius: 14px; padding: 10px;
+            backdrop-filter: blur(14px);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+            display: none; flex-direction: column; gap: 6px;
+            min-width: 180px;
+            transform: translate(-50%, calc(-100% - 22px));
+            pointer-events: auto;
+        }
+        #fruit-popup.show { display: flex; }
+        .popup-row { display: flex; align-items: center; gap: 6px; }
+        .popup-row button {
+            width: 28px; height: 28px; border-radius: 50%;
+            background: rgba(255,255,255,0.06); border: 1px solid var(--panel-border);
+            color: var(--text); cursor: pointer; font-family: inherit; font-size: 14px;
+            display: flex; align-items: center; justify-content: center;
+            transition: background 0.15s;
+            padding: 0;
+        }
+        .popup-row button:hover { background: rgba(255,255,255,0.16); }
+        .popup-row button:disabled { opacity: 0.3; cursor: not-allowed; }
+        .popup-label {
+            flex: 1; text-align: center; font-size: 10px;
+            text-transform: uppercase; letter-spacing: 0.14em; color: var(--muted);
+        }
+        .popup-val { color: var(--text); font-size: 13px; margin-left: 5px; font-variant-numeric: tabular-nums; font-weight: 700; }
+        .popup-actions { display: flex; gap: 6px; margin-top: 2px; }
+        .popup-actions button {
+            flex: 1; padding: 7px 8px; border-radius: 9px;
+            background: rgba(255,255,255,0.06); border: 1px solid var(--panel-border);
+            color: var(--text); font-family: inherit; font-size: 10px;
+            text-transform: uppercase; letter-spacing: 0.08em; cursor: pointer;
+            transition: all 0.15s;
+        }
+        .popup-actions button:hover { background: rgba(255,255,255,0.16); }
+        .popup-actions button.danger:hover { background: rgba(255,80,100,0.28); border-color: rgba(255,80,100,0.5); }
+        .popup-actions button.active { background: linear-gradient(135deg, #ffcc55, #ff8855); border-color: transparent; color: #1a1100; }
+
+        /* ── Toast ──────────────────────────────────────── */
+        #toast {
+            position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%) translateY(20px);
+            background: var(--panel-bg); border: 1px solid var(--panel-border);
+            color: var(--text); padding: 12px 22px; border-radius: 999px;
+            backdrop-filter: blur(14px); font-size: 13px; letter-spacing: 0.03em;
+            opacity: 0; pointer-events: none; transition: all 0.4s ease; z-index: 50;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+        }
+        #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+        /* ── Drag ghost ─────────────────────────────────── */
+        #drag-ghost {
+            position: fixed; pointer-events: none; z-index: 1000;
+            width: 60px; height: 60px; display: none;
+            transform: translate(-50%, -50%);
+        }
+        #drag-ghost.show { display: block; }
+        #drag-ghost svg { width: 100%; height: 100%; filter: drop-shadow(0 0 14px currentColor); }
     </style>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
 </head>
 <body>
-    <div id="mode-btn">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32l1.41-1.41"></path></svg>
-        <div class="mode-dot" style="top:4px;left:22px;"></div>
-        <div class="mode-dot" style="top:14px;left:40px;"></div>
-        <div class="mode-dot" style="top:38px;left:34px;"></div>
-        <div class="mode-dot" style="top:38px;left:10px;"></div>
-        <div class="mode-dot" style="top:14px;left:4px;"></div>
+    <canvas id="bg"></canvas>
+    <canvas id="fg"></canvas>
+    <video id="proc" autoplay playsinline muted></video>
+
+    <!-- Splash -->
+    <div id="splash">
+        <div class="title">Fruit&nbsp;Table</div>
+        <div class="subtitle">Place fruits on the table — closer to the center, the louder they sing. Each color is a different musical voice.</div>
+        <button id="begin">Tap to Begin</button>
     </div>
-    <div id="icon-panel">
-        <div class="icon-row">
-            <button class="icon-btn" id="btn-k-minus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
-            <div class="icon-display"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3" fill="currentColor"/><circle cx="12" cy="12" r="10"/></svg></div>
-            <button class="icon-btn" id="btn-k-plus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+
+    <!-- Camera panel -->
+    <div id="camera-panel">
+        <div class="label">Camera Source</div>
+        <select id="camera-select">
+            <option value="off">Off — virtual fruits only</option>
+            <option value="enable">Enable camera…</option>
+        </select>
+        <button class="iphone-btn" id="iphone-btn" title="Use iPhone via Continuity Camera">
+            <span class="iphone-emoji">📱</span><span>Use iPhone</span>
+        </button>
+        <div class="cam-row">
+            <label><input type="checkbox" id="mirror-toggle"> Mirror</label>
+            <label style="margin-left:auto;"><input type="checkbox" id="silhouette-toggle" checked> Silhouette</label>
         </div>
-        <div class="icon-row">
-            <button class="icon-btn" id="btn-n-minus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
-            <div class="icon-display"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="12 2 22 20 2 20"/></svg></div>
-            <button class="icon-btn" id="btn-n-plus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+        <video id="cam-preview" autoplay playsinline muted></video>
+    </div>
+
+    <!-- Per-fruit popup (k/n + mute + delete) -->
+    <div id="fruit-popup">
+        <div class="popup-row">
+            <button data-act="k-" title="Lower density">−</button>
+            <div class="popup-label">density <span class="popup-val" id="popup-k">0</span></div>
+            <button data-act="k+" title="Raise density">+</button>
+        </div>
+        <div class="popup-row">
+            <button data-act="n-" title="Shorter cycle">−</button>
+            <div class="popup-label">cycle <span class="popup-val" id="popup-n">0</span></div>
+            <button data-act="n+" title="Longer cycle">+</button>
+        </div>
+        <div class="popup-actions">
+            <button data-act="mute" id="popup-mute">Mute</button>
+            <button data-act="del" class="danger">Delete</button>
         </div>
     </div>
+
+    <!-- World/Tempo panel -->
+    <div id="world-panel">
+        <div class="world-row">
+            <button class="world-btn active" data-world="daydream">Daydream</button>
+            <button class="world-btn" data-world="twilight">Twilight</button>
+            <button class="world-btn" data-world="storm">Storm</button>
+        </div>
+        <div class="tempo-row">
+            <span>BPM</span>
+            <input type="range" id="tempo" min="60" max="140" value="84">
+            <span id="tempo-value">84</span>
+        </div>
+    </div>
+
+    <!-- Fruit palette dock -->
+    <div id="palette">
+        <!-- chips injected by JS -->
+    </div>
+
+    <!-- Toast -->
+    <div id="toast"></div>
+
+    <!-- Drag ghost -->
+    <div id="drag-ghost"></div>
 
     <script>
-    // =========================================================
-    //  5 CURATED SETS — each a self-contained musical world
-    // =========================================================
-    const SETS = [
-      // 0 ─ MIST : Ambient drone, E Lydian, very slow
-      {
-        name: 'Mist', color: '#a8e6cf', accent: '#dcedc1',
-        bg: [12, 28, 28], bpm: 63,
-        scale: ['E3','F#3','G#3','A#3','B3','C#4','D#4','E4','F#4','G#4'],
-        padScale: ['E3','G#3','B3','D#4'],
-        available: ['melody','reply','pad','ghost'],
-        gains: { solo:.20, reply:.12, pad:.16, ghost:.18, sub:0, bass:0, kick:0, hat:0, snare:0, openhat:0, rim:0, arp:0, prism:0, bloom:0, pulse:0 },
-        soloLpf: 1400, bassLpf: 700, reverbDecay: 8, delayFb: 0.6
-      },
-      // 1 ─ ARIA : Intimate chamber, A minor, gentle pulse
-      {
-        name: 'Aria', color: '#00ffcc', accent: '#88ffee',
-        bg: [8, 18, 32], bpm: 84,
-        scale: ['A3','B3','C4','D4','E4','F4','G4','A4','B4','C5'],
-        padScale: ['A3','C4','E4','G4'],
-        available: ['melody','reply','rim','ghost','pad','snare'],
-        gains: { solo:.30, reply:.16, pad:.14, ghost:.10, rim:.20, snare:.08, sub:0, bass:0, kick:0, hat:0, openhat:0, arp:0, prism:0, bloom:0, pulse:0 },
-        soloLpf: 1900, bassLpf: 900, reverbDecay: 5, delayFb: 0.5
-      },
-      // 2 ─ BLOOM : Lifting trance, E minor pentatonic + bloom textures
-      {
-        name: 'Bloom', color: '#ffaaa5', accent: '#ffd3b6',
-        bg: [32, 14, 24], bpm: 110,
-        scale: ['E4','G4','A4','B4','D5','E5','G5','A5','B5','D6'],
-        padScale: ['E3','G3','B3','D4','E4'],
-        available: ['melody','arp','bloom','prism','hat','rim','bass','pad'],
-        gains: { solo:.24, arp:.14, bloom:.12, prism:.08, hat:.06, rim:.14, bass:.12, pad:.16, reply:0, ghost:0, sub:0, kick:0, snare:0, openhat:0, pulse:0 },
-        soloLpf: 2200, bassLpf: 1100, reverbDecay: 3, delayFb: 0.35
-      },
-      // 3 ─ DROP : Full colorbass energy, E Phrygian dominant, fast
-      {
-        name: 'Drop', color: '#ff0055', accent: '#ff4488',
-        bg: [12, 4, 16], bpm: 150,
-        scale: ['E3','F3','G#3','A3','B3','C4','D4','E4','F4','G#4'],
-        padScale: ['E2','G#2','B2','D3'],
-        available: ['kick','snare','hat','openhat','bass','sub','arp','prism','pulse'],
-        gains: { kick:.16, snare:.24, hat:.10, openhat:.28, bass:.28, sub:.22, arp:.18, prism:.22, pulse:.12, solo:0, reply:0, pad:0, ghost:0, rim:0, bloom:0 },
-        soloLpf: 1800, bassLpf: 1500, reverbDecay: 1, delayFb: 0.2
-      },
-      // 4 ─ AFTERGLOW : Reflective unwind, C major 7, slow decay
-      {
-        name: 'Afterglow', color: '#9900ff', accent: '#cc66ff',
-        bg: [16, 8, 32], bpm: 72,
-        scale: ['C4','D4','E4','G4','A4','B4','C5','D5','E5','G5'],
-        padScale: ['C3','E3','G3','B3'],
-        available: ['melody','reply','ghost','pad','pulse','rim','bloom'],
-        gains: { solo:.20, reply:.12, ghost:.14, pad:.16, pulse:.06, rim:.10, bloom:.06, sub:0, bass:0, kick:0, hat:0, snare:0, openhat:0, arp:0, prism:0 },
-        soloLpf: 1500, bassLpf: 900, reverbDecay: 7, delayFb: 0.55
-      }
+    'use strict';
+    // ═══════════════════════════════════════════════════════════════
+    //  CONSTANTS
+    // ═══════════════════════════════════════════════════════════════
+    const FRUIT_TYPES = ['red', 'orange', 'yellow', 'green', 'purple', 'blue'];
+    const ROLE_BY_TYPE = {
+        red: 'chord', orange: 'melody', yellow: 'bass',
+        green: 'perc', purple: 'atmos', blue: 'bell'
+    };
+    const ROLE_LABEL = {
+        chord: 'chords', melody: 'melody', bass: 'bass',
+        perc: 'perc', atmos: 'drone', bell: 'sparkle'
+    };
+
+    // HSV ranges for color classification (H: 0–360, S/V: 0–1)
+    // Order matters — first match wins
+    const HSV_RANGES = [
+        { type: 'red',    test: (h, s, v) => (h < 18 || h > 340) && s > 0.45 && v > 0.30 && v < 0.96 },
+        { type: 'orange', test: (h, s, v) => h >= 18 && h < 40  && s > 0.45 && v > 0.40 },
+        { type: 'yellow', test: (h, s, v) => h >= 40 && h < 70  && s > 0.40 && v > 0.50 },
+        { type: 'green',  test: (h, s, v) => h >= 75 && h < 165 && s > 0.30 && v > 0.25 },
+        { type: 'blue',   test: (h, s, v) => h >= 180 && h < 250 && s > 0.40 && v > 0.30 },
+        { type: 'purple', test: (h, s, v) => h >= 260 && h < 335 && s > 0.25 && v > 0.20 }
     ];
 
-    const ALL_INSTRUMENTS = ['kick','hat','snare','openhat','rim','bass','sub','melody','reply','arp','prism','bloom','ghost','pulse','pad'];
-    const CHAR_ACTIONS = ['move','mute','delete'];
+    // Worlds: scale, palette, BPM range, chord progression
+    const WORLDS = {
+        daydream: {
+            name: 'Daydream',
+            bgInner: [38, 22, 64], bgOuter: [10, 12, 24],
+            colors: { red: '#ff6b9d', orange: '#ffb86b', yellow: '#fff36b', green: '#7bff9d', purple: '#bb88ff', blue: '#88ccff' },
+            bpm: 84,
+            scale: ['C4', 'D4', 'E4', 'G4', 'A4', 'C5', 'D5', 'E5'],
+            chords: [['C4','E4','G4','B4'], ['F3','A3','C4','E4'], ['A3','C4','E4','G4'], ['G3','B3','D4','F4']],
+            bass: ['C2', 'F2', 'A1', 'G2'],
+            droneRoot: 'C2'
+        },
+        twilight: {
+            name: 'Twilight',
+            bgInner: [16, 22, 48], bgOuter: [4, 6, 16],
+            colors: { red: '#ff5577', orange: '#ff8855', yellow: '#ffc266', green: '#55ddaa', purple: '#9966dd', blue: '#5588dd' },
+            bpm: 100,
+            scale: ['A3', 'B3', 'C4', 'D4', 'E4', 'F4', 'G4', 'A4'],
+            chords: [['A3','C4','E4','G4'], ['F3','A3','C4','E4'], ['D3','F3','A3','C4'], ['E3','G3','B3','D4']],
+            bass: ['A1', 'F2', 'D2', 'E2'],
+            droneRoot: 'A1'
+        },
+        storm: {
+            name: 'Storm',
+            bgInner: [42, 8, 28], bgOuter: [8, 2, 14],
+            colors: { red: '#ff2255', orange: '#ff5511', yellow: '#ffcc00', green: '#22ff88', purple: '#aa22ff', blue: '#0099ff' },
+            bpm: 130,
+            scale: ['E3', 'F3', 'G#3', 'A3', 'B3', 'C4', 'D4', 'E4'],
+            chords: [['E3','G#3','B3','D4'], ['C3','E3','G3','B3'], ['A3','C4','E4','G4'], ['F3','A3','C4','E4']],
+            bass: ['E1', 'C2', 'A1', 'F2'],
+            droneRoot: 'E1'
+        }
+    };
 
-    const ROLE_GAIN_KEY = { kick:'kick',hat:'hat',snare:'snare',openhat:'openhat',rim:'rim',bass:'bass',sub:'sub',melody:'solo',reply:'reply',arp:'arp',prism:'prism',bloom:'bloom',ghost:'ghost',pad:'pad',pulse:'pulse' };
+    // Per-role rhythm defaults: each fruit gets its OWN Euclidean rhythm
+    // n = total steps (in 16th notes), k = active steps. Fruit size adjusts k.
+    const ROLE_DEFAULTS = {
+        chord:  { n: 16, kDefault: 2, kMin: 1, kMax: 8 },
+        melody: { n: 16, kDefault: 6, kMin: 1, kMax: 14 },
+        bass:   { n: 16, kDefault: 4, kMin: 1, kMax: 8 },
+        perc:   { n: 16, kDefault: 4, kMin: 1, kMax: 14 },
+        atmos:  { n: 32, kDefault: 1, kMin: 1, kMax: 4 },
+        bell:   { n: 16, kDefault: 3, kMin: 1, kMax: 12 }
+    };
 
-    let currentMode = 0;
-    let set = SETS[0];
-    let isAudioInitialized = false;
+    // Performance budget
+    const MAX_PARTICLES = 80;
+    const MAX_TRAILS = 16;
+    const DETECT_INTERVAL_MS = 80;       // ~12.5 Hz
+    const FRUIT_TTL_MS = 500;            // camera fruits removed if not seen
+    const SMOOTH_ALPHA = 0.30;            // EMA blend
+    const MIN_BLOB_CELLS = 5;             // noise filter
+    const PROC_W = 160, PROC_H = 120;
+    const VOICE_CAP_PER_ROLE = 3;
+    const TAP_PIXEL_THRESHOLD = 6;        // px movement before drag is started
 
-    // ── AUDIO ──
-    const nodes = {};
-    const synths = {};
-    let masterReverb, masterDelay;
+    // ═══════════════════════════════════════════════════════════════
+    //  STATE
+    // ═══════════════════════════════════════════════════════════════
+    const fruitState = new Map(); // id -> Fruit
+    let nextFruitId = 0;
+    let currentWorldKey = 'daydream';
+    let blendT = 1; // 0→1 blend during world swap
+    let prevWorldKey = 'daydream';
+    let stepCount = 0;
+    let chordIdx = 0;
+    let cx = 0, cy = 0, R = 400;
+    let pulseScale = 0; // background pulse on chord hit
+    let frameDropCount = 0;
+    let lastFrameMs = performance.now();
+    let perfDegrade = 0; // 0=full, 1=no trails, 2=no particles
+    let selectedFruit = null;
+    let mouseX = 0, mouseY = 0;
+
+    // ═══════════════════════════════════════════════════════════════
+    //  AUDIO
+    // ═══════════════════════════════════════════════════════════════
+    let audioReady = false;
+    const audio = { buses: {}, synths: {}, fx: {}, gainTargets: {} };
 
     async function initAudio() {
         await Tone.start();
-        const master = new Tone.Gain(1).toDestination();
+        const master = new Tone.Gain(0.85).toDestination();
+        audio.fx.compressor = new Tone.Compressor(-18, 3).connect(master);
+        audio.fx.reverb = new Tone.Reverb({ decay: 3.5, wet: 0.32 }).connect(audio.fx.compressor);
+        audio.fx.delay = new Tone.FeedbackDelay({ delayTime: '8n', feedback: 0.32, wet: 0.18 }).connect(audio.fx.reverb);
 
-        const gainKeys = ['solo','reply','pad','ghost','sub','bass','kick','hat','snare','openhat','rim','arp','prism','bloom','pulse'];
-        gainKeys.forEach(k => { nodes[k] = new Tone.Gain(set.gains[k] || 0).connect(master); });
-
-        masterReverb = new Tone.Reverb(set.reverbDecay).toDestination();
-        masterDelay = new Tone.FeedbackDelay("8n", set.delayFb).connect(masterReverb);
-
-        const soloReverb = new Tone.Reverb(3).connect(nodes.solo);
-        const replyReverb = new Tone.Reverb(4).connect(nodes.reply);
-        const padReverb = new Tone.Reverb(6).connect(nodes.pad);
-        const ghostDelay = new Tone.FeedbackDelay("4n",0.6).connect(nodes.ghost);
-        const ghostReverb = new Tone.Reverb(8).connect(ghostDelay);
-        const prismDelay = new Tone.FeedbackDelay("8n",0.3).connect(nodes.prism);
-        const prismReverb = new Tone.Reverb(2).connect(prismDelay);
-        const bassReverb = new Tone.Reverb(1).connect(nodes.bass);
-        const arpDelay = new Tone.FeedbackDelay("16n",0.4).connect(nodes.arp);
-        const bloomDelay = new Tone.FeedbackDelay("8n",0.25).connect(nodes.bloom);
-        const bloomReverb = new Tone.Reverb(3).connect(bloomDelay);
-        const rimDelay = new Tone.FeedbackDelay("4n",0.35).connect(nodes.rim);
-
-        nodes.soloFilter = new Tone.Filter(set.soloLpf,"lowpass").connect(soloReverb);
-        nodes.bassFilter = new Tone.Filter(set.bassLpf,"lowpass").connect(bassReverb);
-        const replyFilter = new Tone.Filter(1600,"lowpass").connect(replyReverb);
-        const padFilter = new Tone.Filter(1000,"lowpass").connect(padReverb);
-        const prismFilter = new Tone.Filter(2600,"lowpass").connect(prismReverb);
-        const subFilter = new Tone.Filter(300,"lowpass").connect(nodes.sub);
-        const ghostFilter = new Tone.Filter(1800,"lowpass").connect(ghostReverb);
-        const arpFilter = new Tone.Filter(2500,"lowpass").connect(arpDelay);
-        const bloomFilter = new Tone.Filter(1600,"lowpass").connect(bloomReverb);
-
-        synths.solo = new Tone.PolySynth(Tone.Synth,{oscillator:{type:"triangle"},envelope:{attack:0.05,release:1}}).connect(nodes.soloFilter);
-        synths.reply = new Tone.PolySynth(Tone.Synth,{oscillator:{type:"triangle"},envelope:{attack:0.04,release:0.8}}).connect(replyFilter);
-        synths.pad = new Tone.PolySynth(Tone.Synth,{oscillator:{type:"sawtooth"},envelope:{attack:0.5,release:2}}).connect(padFilter);
-        synths.sub = new Tone.Synth({oscillator:{type:"triangle"},envelope:{attack:0.1,release:1}}).connect(subFilter);
-        synths.bass = new Tone.Synth({oscillator:{type:"sawtooth"},envelope:{attack:0.05,release:0.5}}).connect(nodes.bassFilter);
-        synths.prism = new Tone.PolySynth(Tone.Synth,{oscillator:{type:"square"},envelope:{attack:0.01,release:0.2}}).connect(prismFilter);
-        synths.pulse = new Tone.Synth({oscillator:{type:"square"},envelope:{attack:0.01,release:0.1}}).connect(nodes.pulse);
-        synths.bloom = new Tone.PolySynth(Tone.Synth,{oscillator:{type:"square"},envelope:{attack:0.01,release:0.15}}).connect(bloomFilter);
-        synths.arp = new Tone.Synth({oscillator:{type:"square"},envelope:{attack:0.01,decay:0.1,sustain:0}}).connect(arpFilter);
-        synths.ghost = new Tone.NoiseSynth({noise:{type:'pink'},envelope:{attack:0.05,decay:0.4,sustain:0}}).connect(ghostFilter);
-        synths.kick = new Tone.MembraneSynth({pitchDecay:0.05,octaves:4,envelope:{attack:0.001,decay:0.4,sustain:0.01,release:1.4}}).connect(nodes.kick);
-        synths.hat = new Tone.MetalSynth({frequency:200,envelope:{attack:0.001,decay:0.1,release:0.01},harmonicity:5.1,modulationIndex:32,resonance:4000,octaves:1.5}).connect(nodes.hat);
-        synths.snare = new Tone.NoiseSynth({noise:{type:'white'},envelope:{attack:0.005,decay:0.2,sustain:0}}).connect(nodes.snare);
-        synths.openhat = new Tone.MetalSynth({frequency:300,envelope:{attack:0.001,decay:0.3,release:0.1},harmonicity:3.5,modulationIndex:20,resonance:6000,octaves:2}).connect(nodes.openhat);
-        synths.rim = new Tone.MembraneSynth({pitchDecay:0.008,octaves:2,envelope:{attack:0.001,decay:0.05,sustain:0,release:0.1}}).connect(rimDelay);
-        synths.rim.volume.value = 4;
-
-        Tone.Transport.bpm.value = set.bpm;
-
-        Tone.Transport.scheduleRepeat((time) => {
-            Tone.Draw.schedule(() => { if (stepCount % 4 === 0) hub.pulse = 20; }, time);
-            characters.forEach(c => {
-                if (c.active && c.sequence[stepCount % c.n] === 1) {
-                    c.playSound(time, stepCount);
-                    Tone.Draw.schedule(() => { c.pulse(); }, time);
-                }
-            });
-            stepCount++;
-        }, "16n");
-
-        Tone.Transport.start();
-        isAudioInitialized = true;
-        applySet();
-    }
-
-    function isRoleAvailable(role) {
-        return set.available.includes(role);
-    }
-
-    function setMode(m) {
-        currentMode = m % 5;
-        set = SETS[currentMode];
-        applySet();
-    }
-
-    function applySet() {
-        // BPM
-        Tone.Transport.bpm.rampTo(set.bpm, 2);
-
-        // Gains
-        const gainKeys = ['solo','reply','pad','ghost','sub','bass','kick','hat','snare','openhat','rim','arp','prism','bloom','pulse'];
-        gainKeys.forEach(k => { nodes[k].gain.rampTo((set.gains[k] || 0) * 2, 1.5); });
-
-        // Filters & FX
-        nodes.soloFilter.frequency.rampTo(set.soloLpf, 1.5);
-        nodes.bassFilter.frequency.rampTo(set.bassLpf, 1.5);
-
-        // Auto-mute / auto-unmute
-        characters.forEach(c => {
-            let gainKey = ROLE_GAIN_KEY[c.role];
-            let g = set.gains[gainKey] || 0;
-            if (g <= 0) { c.active = false; c.autoMuted = true; }
-            else if (c.autoMuted) { c.active = true; c.autoMuted = false; }
+        // Per-role buses
+        const roles = ['chord', 'melody', 'bass', 'perc', 'atmos', 'bell'];
+        roles.forEach(r => {
+            audio.buses[r] = new Tone.Gain(0).connect(audio.fx.delay);
+            audio.gainTargets[r] = 0;
         });
 
-        updateUI();
+        // Chord pad
+        const chordFilter = new Tone.Filter(1400, 'lowpass').connect(audio.buses.chord);
+        audio.synths.chord = new Tone.PolySynth(Tone.Synth, {
+            oscillator: { type: 'sine' },
+            envelope: { attack: 0.6, decay: 0.4, sustain: 0.7, release: 1.8 }
+        }).connect(chordFilter);
+        audio.synths.chord.volume.value = -8;
+
+        // Melody lead
+        const meloFilter = new Tone.Filter(2200, 'lowpass').connect(audio.buses.melody);
+        audio.synths.melody = new Tone.Synth({
+            oscillator: { type: 'triangle' },
+            envelope: { attack: 0.02, decay: 0.2, sustain: 0.35, release: 0.6 }
+        }).connect(meloFilter);
+        audio.synths.melody.volume.value = -4;
+
+        // Bass
+        const bassFilter = new Tone.Filter(800, 'lowpass').connect(audio.buses.bass);
+        audio.synths.bass = new Tone.Synth({
+            oscillator: { type: 'sawtooth' },
+            envelope: { attack: 0.04, decay: 0.25, sustain: 0.4, release: 0.4 }
+        }).connect(bassFilter);
+        audio.synths.bass.volume.value = -6;
+
+        // Percussion (membrane + noise)
+        audio.synths.perc = new Tone.MembraneSynth({
+            pitchDecay: 0.012, octaves: 6, envelope: { attack: 0.001, decay: 0.18, sustain: 0, release: 0.12 }
+        }).connect(audio.buses.perc);
+        audio.synths.percHat = new Tone.MetalSynth({
+            frequency: 280, envelope: { attack: 0.001, decay: 0.06, release: 0.02 },
+            harmonicity: 5.1, modulationIndex: 32, resonance: 4000, octaves: 1.2
+        }).connect(audio.buses.perc);
+        audio.synths.percHat.volume.value = -22;
+
+        // Atmosphere drone
+        const atmosFilter = new Tone.Filter(900, 'lowpass').connect(audio.buses.atmos);
+        audio.synths.atmos = new Tone.PolySynth(Tone.Synth, {
+            oscillator: { type: 'sawtooth' },
+            envelope: { attack: 2.5, decay: 1.0, sustain: 0.9, release: 4.0 }
+        }).connect(atmosFilter);
+        audio.synths.atmos.volume.value = -14;
+
+        // Bell sparkle
+        audio.synths.bell = new Tone.PolySynth(Tone.Synth, {
+            oscillator: { type: 'sine' },
+            envelope: { attack: 0.001, decay: 0.4, sustain: 0, release: 0.3 }
+        }).connect(audio.buses.bell);
+        audio.synths.bell.volume.value = -10;
+
+        // Transport tick — 16n for per-fruit Euclidean precision
+        Tone.Transport.bpm.value = WORLDS[currentWorldKey].bpm;
+        Tone.Transport.scheduleRepeat(audioTick, '16n');
+        Tone.Transport.start('+0.05');
+
+        audioReady = true;
     }
 
-    // ── VISUAL ──
-    let particles=[], ripples=[], bgFlashes=[], characters=[];
-    let stepCount=0, selectedCharacter=null;
-    const hub = {x:0,y:0,radius:50,pulse:0};
-    let gestureState = {active:false,type:null,startX:0,startY:0,target:null,currentAngle:0,distance:0};
-
-    function setup() {
-        createCanvas(windowWidth, windowHeight); noStroke();
-        hub.x = width/2; hub.y = height/2;
-        characters.push(new Character('melody', width/2, height/2-120, 5, 16));
-        characters.push(new Character('ghost', width/2+100, height/2+100, 2, 16));
-        setupUI(); updateUI();
+    // ═══════════════════════════════════════════════════════════════
+    //  FRUIT STATE / VOLUME
+    // ═══════════════════════════════════════════════════════════════
+    function addFruit(type, x, y, source, opts = {}) {
+        const id = ++nextFruitId;
+        const role = ROLE_BY_TYPE[type];
+        const def = ROLE_DEFAULTS[role];
+        const n = opts.n != null ? opts.n : def.n;
+        const k = opts.k != null ? clamp(opts.k, def.kMin, Math.min(def.kMax, n - 1)) : def.kDefault;
+        const f = {
+            id, type, role, source,
+            x, y, sx: x, sy: y,
+            tx: x, ty: y,
+            lastSeen: performance.now(),
+            pulseT: 0,
+            wobble: Math.random() * Math.PI * 2,
+            // Euclidean rhythm
+            n, k, seq: [], phase: id % n,
+            // size: drives visual scale AND Euclidean k
+            size: opts.size != null ? opts.size : 1.0,
+            muted: false,
+            noteIdx: 0
+        };
+        updateEuclidean(f);
+        fruitState.set(id, f);
+        return f;
     }
 
-    function draw() {
-        background(set.bg[0], set.bg[1], set.bg[2], 60);
-
-        for (let i=bgFlashes.length-1;i>=0;i--) { let f=bgFlashes[i]; fill(f.color[0],f.color[1],f.color[2],f.alpha); rect(0,0,width,height); f.alpha-=f.decay; if(f.alpha<=0) bgFlashes.splice(i,1); }
-
-        hub.x=width/2; hub.y=height/2;
-        push(); translate(hub.x,hub.y);
-        noFill(); strokeWeight(2); stroke(255,100); ellipse(0,0,hub.radius*2+hub.pulse);
-        fill(255,20); ellipse(0,0,hub.radius*2);
-        stroke(255); strokeWeight(3); line(-10,0,10,0); line(0,-10,0,10);
-        if(hub.pulse>0) hub.pulse*=0.9;
-        pop();
-
-        for (let i=ripples.length-1;i>=0;i--) { let r=ripples[i]; noFill(); strokeWeight(r.weight); stroke(r.c[0],r.c[1],r.c[2],r.alpha); ellipse(r.x,r.y,r.size); r.size+=r.speed; r.alpha-=r.decay; r.weight*=0.95; if(r.alpha<=0) ripples.splice(i,1); }
-        noStroke();
-
-        characters.forEach(c => { c.update(); c.display(); });
-
-        for (let i=particles.length-1;i>=0;i--) { let p=particles[i]; fill(p.c[0],p.c[1],p.c[2],p.alpha); push(); translate(p.x,p.y); rotate(p.rotation); if(p.shape==='circle') ellipse(0,0,p.size); else if(p.shape==='rect') rect(-p.size/2,-p.size/2,p.size,p.size); else triangle(-p.size/2,p.size/2,p.size/2,p.size/2,0,-p.size/2); pop(); p.x+=p.vx; p.y+=p.vy; p.vy+=0.05; p.rotation+=p.vr; p.alpha-=p.decay; p.size*=0.98; if(p.alpha<=0||p.size<0.5) particles.splice(i,1); }
-
-        drawGestures();
-
-        if (selectedCharacter && !gestureState.active) {
-            const panel = document.getElementById('icon-panel');
-            let tx=selectedCharacter.x, ty=selectedCharacter.y;
-            if(tx>width-150) tx=selectedCharacter.x-120;
-            if(ty<100) ty=100; if(ty>height-100) ty=height-100;
-            panel.style.left=tx+'px'; panel.style.top=ty+'px';
-        } else { document.getElementById('icon-panel').style.display='none'; }
+    function removeFruit(id) {
+        if (selectedFruit && selectedFruit.id === id) selectedFruit = null;
+        fruitState.delete(id);
     }
 
-    function drawGestures() {
-        if (!gestureState.active) return;
-        gestureState.distance = dist(gestureState.startX,gestureState.startY,mouseX,mouseY);
-        gestureState.currentAngle = atan2(mouseY-gestureState.startY,mouseX-gestureState.startX);
-        if (gestureState.currentAngle<0) gestureState.currentAngle+=TWO_PI;
+    function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
-        push(); translate(gestureState.startX,gestureState.startY);
+    // Standard Bjorklund-style Euclidean rhythm (k beats distributed across n steps)
+    function updateEuclidean(f) {
+        const { n, k } = f;
+        const seq = new Array(n).fill(0);
+        for (let i = 0; i < n; i++) {
+            seq[i] = (Math.floor(i * k / n) !== Math.floor((i - 1) * k / n)) ? 1 : 0;
+        }
+        // Ensure exactly k ones (rounding nudge)
+        let ones = seq.reduce((a, b) => a + b, 0);
+        if (ones !== k) {
+            seq.fill(0);
+            for (let i = 0; i < k; i++) seq[Math.floor(i * n / k)] = 1;
+        }
+        f.seq = seq;
+    }
 
-        if (gestureState.type === 'hub_dial') {
-            // Only show instruments available in this set
-            let items = set.available;
-            let numItems = items.length;
-            let angleStep = TWO_PI / numItems;
-            let selectedIndex = floor((gestureState.currentAngle+angleStep/2)/angleStep)%numItems;
-            let ringRadius = 90 + numItems * 3;
-            
-            noFill(); stroke(255,30); strokeWeight(2); ellipse(0,0,ringRadius*2);
+    // Camera fruits derive k from blob cell count.
+    // ~5 cells = small (k=kMin), ~50+ cells = full (k=kMax).
+    function kFromCellCount(role, count) {
+        const def = ROLE_DEFAULTS[role];
+        const t = clamp((count - 5) / 45, 0, 1);
+        return Math.round(def.kMin + t * (def.kMax - def.kMin));
+    }
 
-            for (let i=0; i<numItems; i++) {
-                let a = i * angleStep;
-                let px = cos(a)*ringRadius, py = sin(a)*ringRadius;
-                let isSel = (i===selectedIndex && gestureState.distance>40);
-                
-                noStroke();
-                fill(isSel ? set.color : 80);
-                ellipse(px,py,isSel?24:12);
-                
-                if (isSel) {
-                    fill(255); textAlign(CENTER,CENTER); textSize(12);
-                    let lx=cos(a)*(ringRadius+28), ly=sin(a)*(ringRadius+28);
-                    text(items[i].toUpperCase(),lx,ly);
-                }
+    function fruitsOfRole(role) {
+        const out = [];
+        for (const f of fruitState.values()) if (f.role === role) out.push(f);
+        return out;
+    }
+
+    function loudnessOf(f) {
+        const dx = f.sx - cx, dy = f.sy - cy;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        const r = Math.min(1, d / R);
+        return Math.pow(1 - r, 1.5);
+    }
+
+    function angleOf(f) {
+        return Math.atan2(f.sy - cy, f.sx - cx);
+    }
+
+    function applyRoleVolumes(time) {
+        if (!audioReady) return;
+        const roles = ['chord', 'melody', 'bass', 'perc', 'atmos', 'bell'];
+        for (const role of roles) {
+            const fs = fruitsOfRole(role);
+            let g = 0;
+            // Take loudest, plus a small additive bonus per extra fruit (capped)
+            for (const f of fs) {
+                const l = loudnessOf(f);
+                g = Math.max(g, l);
             }
-            stroke(255,80); strokeWeight(1.5);
-            line(0,0,mouseX-gestureState.startX,mouseY-gestureState.startY);
+            // Bonus for layering (capped at VOICE_CAP_PER_ROLE)
+            const layerBonus = Math.min(fs.length, VOICE_CAP_PER_ROLE) - 1;
+            g = Math.min(1, g + layerBonus * 0.06);
+            audio.gainTargets[role] = g;
+            audio.buses[role].gain.rampTo(g, 0.08, time);
+        }
+    }
 
-        } else if (gestureState.type === 'char_action') {
-            let numItems = CHAR_ACTIONS.length;
-            let angleStep = TWO_PI / numItems;
-            let selectedIndex = floor((gestureState.currentAngle+angleStep/2)/angleStep)%numItems;
-            
-            noFill(); stroke(255,30); strokeWeight(2); ellipse(0,0,120);
+    // ═══════════════════════════════════════════════════════════════
+    //  MUSIC LOGIC (per-tick generator)
+    // ═══════════════════════════════════════════════════════════════
+    function world() { return WORLDS[currentWorldKey]; }
 
-            for (let i=0;i<numItems;i++) {
-                let a=i*angleStep, px=cos(a)*60, py=sin(a)*60;
-                let isSel=(i===selectedIndex && gestureState.distance>30);
-                let col = CHAR_ACTIONS[i]==='delete'?'#ff0055':CHAR_ACTIONS[i]==='mute'?'#ffcc00':'#ffffff';
-                fill(isSel?col:50); noStroke(); ellipse(px,py,isSel?20:10);
-                if(isSel){ fill(col); textAlign(CENTER,CENTER); textSize(12); text(CHAR_ACTIONS[i].toUpperCase(),cos(a)*90,sin(a)*90); }
-            }
-            if(CHAR_ACTIONS[selectedIndex]==='move' && gestureState.distance>30) {
-                gestureState.target.tx=mouseX; gestureState.target.ty=mouseY;
-                stroke(255,80); strokeWeight(1.5); line(0,0,mouseX-gestureState.startX,mouseY-gestureState.startY);
+    function audioTick(time) {
+        applyRoleVolumes(time);
+
+        const W = world();
+        const step = stepCount;
+
+        // Chord progression advances per "chord trigger" event
+        // We collect, per role, the fruits that are firing this tick
+        const firingByRole = { chord: [], melody: [], bass: [], perc: [], atmos: [], bell: [] };
+        for (const f of fruitState.values()) {
+            if (f.muted) continue;
+            const idx = (step + f.phase) % f.n;
+            if (f.seq[idx] === 1) firingByRole[f.role].push(f);
+        }
+
+        // CHORD: each firing red advances chord and plays it
+        for (const f of firingByRole.chord) {
+            const v = loudnessOf(f);
+            if (v < 0.02) continue;
+            chordIdx = (chordIdx + 1) % W.chords.length;
+            audio.synths.chord.triggerAttackRelease(W.chords[chordIdx], '2n', time, Math.max(0.2, v));
+            Tone.Draw.schedule(() => {
+                pulseScale = Math.max(pulseScale, v);
+                pulseFruit(f);
+                if (perfDegrade < 1) spawnTrail(f, W.colors.red);
+            }, time);
+            break; // only one chord change per tick
+        }
+
+        // BASS: alternates root / fifth based on tick parity
+        if (firingByRole.bass.length > 0) {
+            const f = pickLoudest(firingByRole.bass);
+            const v = loudnessOf(f);
+            if (v >= 0.02) {
+                const bn = W.bass[chordIdx];
+                const isFifth = ((step + f.phase) >> 1) % 2 === 1;
+                const note = isFifth ? transposeByFifth(bn) : bn;
+                audio.synths.bass.triggerAttackRelease(note, '8n', time, Math.max(0.2, v));
+                Tone.Draw.schedule(() => {
+                    firingByRole.bass.forEach(pulseFruit);
+                    if (perfDegrade < 1) spawnTrail(f, W.colors.yellow);
+                }, time);
             }
         }
-        pop();
-    }
 
-    function windowResized() { resizeCanvas(windowWidth,windowHeight); }
-
-    async function mousePressed(event) {
-        if(event.target.tagName!=='CANVAS') return;
-        if(!isAudioInitialized) await initAudio();
-
-        gestureState.startX=mouseX; gestureState.startY=mouseY; gestureState.distance=0;
-        
-        if(dist(mouseX,mouseY,hub.x,hub.y)<hub.radius) { gestureState.active=true; gestureState.type='hub_dial'; gestureState.target=hub; selectCharacter(null); return; }
-        
-        for(let i=characters.length-1;i>=0;i--) {
-            let c=characters[i];
-            if(dist(mouseX,mouseY,c.x,c.y)<c.baseSize+30) { gestureState.active=true; gestureState.type='char_action'; gestureState.target=c; selectCharacter(c); return; }
+        // MELODY: each firing orange picks a note from its OWN angle (polyphonic when >1)
+        for (const f of firingByRole.melody) {
+            const v = loudnessOf(f);
+            if (v < 0.02) continue;
+            const a = (angleOf(f) + Math.PI) / (Math.PI * 2);
+            const baseDeg = Math.floor(a * W.scale.length) % W.scale.length;
+            const offset = [0, 2, -1, 1, 0, -2, 1, 3][f.noteIdx % 8];
+            const deg = ((baseDeg + offset) % W.scale.length + W.scale.length) % W.scale.length;
+            f.noteIdx++;
+            audio.synths.melody.triggerAttackRelease(W.scale[deg], '16n', time, Math.max(0.2, v));
+            Tone.Draw.schedule(() => {
+                pulseFruit(f);
+                if (perfDegrade < 1) spawnTrail(f, W.colors.orange);
+            }, time);
         }
-        selectCharacter(null);
-        triggerPad(mouseX,mouseY,false);
+
+        // PERCUSSION: kick on firing, hat on alternating
+        if (firingByRole.perc.length > 0) {
+            const f = pickLoudest(firingByRole.perc);
+            const v = loudnessOf(f);
+            if (v >= 0.02) {
+                audio.synths.perc.triggerAttackRelease('C2', '16n', time, Math.max(0.2, v));
+                if (step % 2 === 1) audio.synths.percHat.triggerAttackRelease('32n', time, Math.max(0.2, v * 0.7));
+                Tone.Draw.schedule(() => {
+                    firingByRole.perc.forEach(pulseFruit);
+                    if (perfDegrade < 1) spawnTrail(f, W.colors.green);
+                }, time);
+            }
+        }
+
+        // ATMOSPHERE: layered drone, fifth above + root, low velocity
+        for (const f of firingByRole.atmos) {
+            const v = loudnessOf(f);
+            if (v < 0.02) continue;
+            audio.synths.atmos.triggerAttackRelease(
+                [W.droneRoot, transposeOctave(W.droneRoot, 1)],
+                '2m', time, Math.max(0.15, v * 0.7)
+            );
+            Tone.Draw.schedule(() => pulseFruit(f), time);
+        }
+
+        // BELL: sparkle high notes for each firing blue
+        for (const f of firingByRole.bell) {
+            const v = loudnessOf(f);
+            if (v < 0.02) continue;
+            const a = (angleOf(f) + Math.PI) / (Math.PI * 2);
+            const deg = Math.floor(a * W.scale.length) % W.scale.length;
+            const note = W.scale[deg];
+            const high = note.replace(/\d/, n => Math.min(7, parseInt(n) + 1));
+            audio.synths.bell.triggerAttackRelease(high, '32n', time, Math.max(0.2, v));
+            Tone.Draw.schedule(() => {
+                pulseFruit(f);
+                if (perfDegrade < 1) spawnTrail(f, W.colors.blue);
+            }, time);
+        }
+
+        stepCount++;
     }
 
-    function mouseDragged(event) {
-        if(!isAudioInitialized) return;
-        if(event.target.tagName!=='CANVAS') return;
-        if(!gestureState.active && frameCount%8===0) triggerPad(mouseX,mouseY,true);
+    function pickLoudest(arr) {
+        let best = arr[0], bv = loudnessOf(best);
+        for (let i = 1; i < arr.length; i++) {
+            const v = loudnessOf(arr[i]);
+            if (v > bv) { bv = v; best = arr[i]; }
+        }
+        return best;
     }
 
-    function mouseReleased() {
-        if(gestureState.active) {
-            if(gestureState.distance>30) {
-                if(gestureState.type==='hub_dial') {
-                    let items=set.available;
-                    let angleStep=TWO_PI/items.length;
-                    let idx=floor((gestureState.currentAngle+angleStep/2)/angleStep)%items.length;
-                    spawnCharacter(items[idx],mouseX,mouseY);
-                } else if(gestureState.type==='char_action') {
-                    let angleStep=TWO_PI/CHAR_ACTIONS.length;
-                    let idx=floor((gestureState.currentAngle+angleStep/2)/angleStep)%CHAR_ACTIONS.length;
-                    let action=CHAR_ACTIONS[idx];
-                    if(action==='mute'){gestureState.target.active=!gestureState.target.active; gestureState.target.autoMuted=false;}
-                    else if(action==='delete'){spawnParticles(gestureState.target.x,gestureState.target.y,gestureState.target.c,30,15); characters=characters.filter(c=>c!==gestureState.target); selectCharacter(null);}
-                }
+    function transposeByFifth(note) {
+        // Approximate: just add 7 semitones via Tone
+        try { return Tone.Frequency(note).transpose(7).toNote(); } catch (e) { return note; }
+    }
+    function transposeOctave(note, oct) {
+        try { return Tone.Frequency(note).transpose(12 * oct).toNote(); } catch (e) { return note; }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  CAMERA + DETECTION
+    // ═══════════════════════════════════════════════════════════════
+    const camera = {
+        stream: null,
+        deviceId: null,
+        mirror: false,
+        showSilhouette: true,
+        hasPermission: false,
+        videoEl: null,
+        previewEl: null,
+        offCanvas: null,
+        offCtx: null,
+        lastDetect: 0,
+        trackedById: new Map() // map of camera-only fruits, keyed by camera type
+    };
+
+    async function unlockLabels() {
+        if (camera.hasPermission) return true;
+        try {
+            const s = await navigator.mediaDevices.getUserMedia({ video: true });
+            camera.hasPermission = true;
+            // Stop temp stream — we'll re-acquire with desired deviceId
+            s.getTracks().forEach(t => t.stop());
+            return true;
+        } catch (e) {
+            console.warn('Camera permission denied', e);
+            showToast('Camera permission denied');
+            return false;
+        }
+    }
+
+    async function refreshCameraList() {
+        const sel = document.getElementById('camera-select');
+        const cur = sel.value;
+        const offOpt = '<option value="off">Off — virtual fruits only</option>';
+        if (!camera.hasPermission) {
+            sel.innerHTML = offOpt + '<option value="enable">Enable camera…</option>';
+            return;
+        }
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const vids = devices.filter(d => d.kind === 'videoinput');
+        let html = offOpt;
+        // Sort: iPhones first (most likely Continuity Camera target)
+        vids.sort((a, b) => {
+            const ai = isIphoneLabel(a.label) ? 0 : 1;
+            const bi = isIphoneLabel(b.label) ? 0 : 1;
+            return ai - bi;
+        });
+        vids.forEach(d => {
+            const rawLabel = d.label || `Camera ${d.deviceId.slice(0, 6)}`;
+            const label = isIphoneLabel(rawLabel) ? `📱 ${rawLabel}` : rawLabel;
+            html += `<option value="${d.deviceId}">${escapeHtml(label)}</option>`;
+        });
+        sel.innerHTML = html;
+        if (cur && [...sel.options].some(o => o.value === cur)) sel.value = cur;
+        else if (camera.deviceId) sel.value = camera.deviceId;
+    }
+
+    function escapeHtml(s) { return s.replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c])); }
+
+    async function selectCamera(deviceId) {
+        // Stop existing
+        if (camera.stream) {
+            camera.stream.getTracks().forEach(t => t.stop());
+            camera.stream = null;
+        }
+        camera.deviceId = null;
+        document.getElementById('cam-preview').classList.remove('show');
+
+        if (deviceId === 'off' || !deviceId) {
+            for (const [id, f] of [...fruitState.entries()]) {
+                if (f.source === 'camera') fruitState.delete(id);
+            }
+            camera.trackedById.clear();
+            localStorage.setItem('fruitTable.cameraId', 'off');
+            const iphoneBtn = document.getElementById('iphone-btn');
+            if (iphoneBtn) iphoneBtn.classList.remove('active');
+            return;
+        }
+
+        try {
+            const constraints = {
+                video: { deviceId: { exact: deviceId }, width: { ideal: 640 }, height: { ideal: 480 } }
+            };
+            const s = await navigator.mediaDevices.getUserMedia(constraints);
+            camera.stream = s;
+            camera.deviceId = deviceId;
+            camera.videoEl.srcObject = s;
+            camera.previewEl.srcObject = s;
+            camera.previewEl.classList.add('show');
+            await camera.videoEl.play().catch(() => {});
+            await camera.previewEl.play().catch(() => {});
+            localStorage.setItem('fruitTable.cameraId', deviceId);
+            // Reflect iPhone state on the quick button
+            const sel = document.getElementById('camera-select');
+            const opt = [...sel.options].find(o => o.value === deviceId);
+            const iphoneBtn = document.getElementById('iphone-btn');
+            if (iphoneBtn) iphoneBtn.classList.toggle('active', !!(opt && isIphoneLabel(opt.textContent)));
+        } catch (e) {
+            console.warn('Camera switch failed', e);
+            showToast('Could not open that camera');
+            document.getElementById('camera-select').value = 'off';
+        }
+    }
+
+    // ── Detection ───────────────────────────────────────────────────
+    function detectFrame(now) {
+        if (!camera.stream || !camera.videoEl.videoWidth) return;
+        if (now - camera.lastDetect < DETECT_INTERVAL_MS) return;
+        camera.lastDetect = now;
+
+        const ctx = camera.offCtx;
+        const w = PROC_W, h = PROC_H;
+        try {
+            if (camera.mirror) {
+                ctx.save();
+                ctx.translate(w, 0); ctx.scale(-1, 1);
+                ctx.drawImage(camera.videoEl, 0, 0, w, h);
+                ctx.restore();
             } else {
-                if(gestureState.type==='hub_dial') spawnCharacter(random(set.available),mouseX+random(-50,50),mouseY+random(-50,50));
-                else if(gestureState.type==='char_action') document.getElementById('icon-panel').style.display='flex';
+                ctx.drawImage(camera.videoEl, 0, 0, w, h);
+            }
+        } catch (e) { return; }
+
+        const img = ctx.getImageData(0, 0, w, h);
+        const data = img.data;
+        // 4-cell grid: 40x30
+        const CELL = 4;
+        const cols = w / CELL, rows = h / CELL;
+        // grid[r][c] = type or null
+        const grid = new Int8Array(cols * rows); // 0 = none, 1..6 = type+1
+        const TYPE_IDX = { red: 1, orange: 2, yellow: 3, green: 4, blue: 5, purple: 6 };
+        const IDX_TYPE = ['', 'red', 'orange', 'yellow', 'green', 'blue', 'purple'];
+
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                const px = c * CELL + (CELL >> 1);
+                const py = r * CELL + (CELL >> 1);
+                const i = (py * w + px) << 2;
+                const R8 = data[i], G8 = data[i + 1], B8 = data[i + 2];
+                const [hh, ss, vv] = rgb2hsv(R8, G8, B8);
+                let t = 0;
+                for (const range of HSV_RANGES) {
+                    if (range.test(hh, ss, vv)) { t = TYPE_IDX[range.type]; break; }
+                }
+                grid[r * cols + c] = t;
             }
         }
-        gestureState.active=false;
-    }
 
-    function spawnCharacter(role,tx,ty) {
-        let k={kick:4,hat:8,bass:3,snare:2,openhat:2,rim:3,sub:2,melody:5,reply:4,arp:7,prism:5,bloom:3,ghost:2,pulse:3,pad:4}[role]||4;
-        let c=new Character(role,hub.x,hub.y,k,16);
-        c.tx=tx; c.ty=ty;
-        characters.push(c); selectCharacter(c);
-        spawnParticles(hub.x,hub.y,c.c,15,8); spawnRipples(hub.x,hub.y,c.c,2);
-    }
+        // Connected components per type
+        const visited = new Uint8Array(cols * rows);
+        const blobs = []; // {type, cx, cy, count}
+        const stack = [];
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                const idx = r * cols + c;
+                if (visited[idx] || grid[idx] === 0) continue;
+                const t = grid[idx];
+                let sumX = 0, sumY = 0, count = 0;
+                stack.length = 0;
+                stack.push(idx);
+                visited[idx] = 1;
+                while (stack.length) {
+                    const k = stack.pop();
+                    const kr = (k / cols) | 0, kc = k - kr * cols;
+                    sumX += kc; sumY += kr; count++;
+                    // 4-neighborhood
+                    const ns = [
+                        kr > 0 ? k - cols : -1,
+                        kr < rows - 1 ? k + cols : -1,
+                        kc > 0 ? k - 1 : -1,
+                        kc < cols - 1 ? k + 1 : -1
+                    ];
+                    for (let n = 0; n < 4; n++) {
+                        const nk = ns[n];
+                        if (nk >= 0 && !visited[nk] && grid[nk] === t) {
+                            visited[nk] = 1; stack.push(nk);
+                        }
+                    }
+                }
+                if (count >= MIN_BLOB_CELLS) {
+                    blobs.push({ type: IDX_TYPE[t], cx: sumX / count, cy: sumY / count, count });
+                }
+            }
+        }
 
-    function triggerPad(x,y,isDrag=false) {
-        if(!isAudioInitialized) return;
-        let col=color(set.color).levels;
-        spawnParticles(x,y,col,isDrag?2:8,isDrag?3:8);
-        if(!isDrag) spawnRipples(x,y,col,1);
-
-        let note=random(set.padScale);
-        if(isDrag) synths.pad.triggerAttackRelease(note,"8n");
-        else synths.pad.triggerAttackRelease([note,random(set.padScale)],"2n");
-
-        characters.forEach(c=>{
-            if(c.active && !c.isSelected && !gestureState.active){c.tx=x+random(-150,150); c.ty=y+random(-150,150);}
+        // Map normalized blob positions (0..1 in image) to canvas coords centered on table
+        const detected = blobs.map(b => {
+            // image coords: (b.cx/cols, b.cy/rows) in [0..1]
+            // map to table around (cx, cy) with radius ~ R
+            const nx = b.cx / cols;
+            const ny = b.cy / rows;
+            const x = cx + (nx - 0.5) * R * 2.0;
+            const y = cy + (ny - 0.5) * R * 2.0;
+            return { type: b.type, x, y, count: b.count };
         });
+
+        trackCamera(detected, now);
+    }
+
+    function rgb2hsv(r, g, b) {
+        r /= 255; g /= 255; b /= 255;
+        const max = Math.max(r, g, b), min = Math.min(r, g, b);
+        const d = max - min;
+        let h = 0;
+        if (d !== 0) {
+            if (max === r) h = ((g - b) / d) % 6;
+            else if (max === g) h = (b - r) / d + 2;
+            else h = (r - g) / d + 4;
+            h *= 60;
+            if (h < 0) h += 360;
+        }
+        const s = max === 0 ? 0 : d / max;
+        const v = max;
+        return [h, s, v];
+    }
+
+    // Track camera blobs to fruitState. Multiple blobs of same type within frame
+    // map to up to N tracked fruits per type, matched by nearest-neighbor.
+    function trackCamera(detected, now) {
+        // Group detected by type
+        const byType = {};
+        for (const d of detected) (byType[d.type] = byType[d.type] || []).push(d);
+        // Limit per type
+        for (const t in byType) {
+            byType[t].sort((a, b) => b.count - a.count);
+            byType[t] = byType[t].slice(0, VOICE_CAP_PER_ROLE);
+        }
+
+        // Existing camera fruits, grouped by type
+        const existingByType = {};
+        for (const f of fruitState.values()) {
+            if (f.source === 'camera') (existingByType[f.type] = existingByType[f.type] || []).push(f);
+        }
+
+        // Match and update
+        for (const t of FRUIT_TYPES) {
+            const obs = byType[t] || [];
+            const ex = existingByType[t] || [];
+            const usedObs = new Set(), usedEx = new Set();
+            // Greedy NN matching
+            const pairs = [];
+            for (let i = 0; i < ex.length; i++) {
+                let best = -1, bestD = Infinity;
+                for (let j = 0; j < obs.length; j++) {
+                    if (usedObs.has(j)) continue;
+                    const dx = ex[i].sx - obs[j].x, dy = ex[i].sy - obs[j].y;
+                    const dd = dx * dx + dy * dy;
+                    if (dd < bestD) { bestD = dd; best = j; }
+                }
+                const matchThresh = (R * 0.6) * (R * 0.6);
+                if (best >= 0 && bestD < matchThresh) {
+                    pairs.push([i, best]); usedEx.add(i); usedObs.add(best);
+                }
+            }
+            // Update matched
+            for (const [i, j] of pairs) {
+                const f = ex[i], o = obs[j];
+                f.sx = lerp(f.sx, o.x, SMOOTH_ALPHA);
+                f.sy = lerp(f.sy, o.y, SMOOTH_ALPHA);
+                f.x = f.sx; f.y = f.sy;
+                f.lastSeen = now;
+                // Smooth size from cell count, recompute k if it changed
+                const newSize = clamp((o.count - 5) / 45, 0, 1) * 1.5 + 0.6;
+                f.size = lerp(f.size, newSize, 0.15);
+                const newK = kFromCellCount(f.role, o.count);
+                if (newK !== f.k) { f.k = newK; updateEuclidean(f); }
+            }
+            // New observations -> spawn
+            for (let j = 0; j < obs.length; j++) {
+                if (usedObs.has(j)) continue;
+                const o = obs[j];
+                const k = kFromCellCount(ROLE_BY_TYPE[t], o.count);
+                const size = clamp((o.count - 5) / 45, 0, 1) * 1.5 + 0.6;
+                addFruit(t, o.x, o.y, 'camera', { k, size });
+            }
+            // Unmatched existing -> aged out by TTL below
+        }
+
+        // TTL: remove camera fruits not seen recently
+        for (const [id, f] of [...fruitState.entries()]) {
+            if (f.source === 'camera' && now - f.lastSeen > FRUIT_TTL_MS) {
+                fruitState.delete(id);
+            }
+        }
+    }
+
+    function lerp(a, b, t) { return a + (b - a) * t; }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  PALETTE / DRAG
+    // ═══════════════════════════════════════════════════════════════
+    const FRUIT_GLYPH = {
+        red:    `<svg viewBox="0 0 40 40"><circle cx="20" cy="22" r="14" fill="#ff5577"/><path d="M19 8 Q22 5 25 8" stroke="#5b8a3a" stroke-width="2" fill="none"/></svg>`,
+        orange: `<svg viewBox="0 0 40 40"><circle cx="20" cy="22" r="13" fill="#ff9933"/><circle cx="20" cy="22" r="13" fill="none" stroke="#cc6600" stroke-width="0.8" opacity="0.5"/><path d="M19 9 Q22 5 25 9" stroke="#5b8a3a" stroke-width="2" fill="none"/></svg>`,
+        yellow: `<svg viewBox="0 0 40 40"><path d="M10 30 Q14 6 26 8 Q30 26 14 32 Z" fill="#ffd633"/></svg>`,
+        green:  `<svg viewBox="0 0 40 40"><circle cx="20" cy="22" r="13" fill="#33cc66"/><path d="M19 9 Q22 4 26 8" stroke="#5b8a3a" stroke-width="2" fill="none"/></svg>`,
+        purple: `<svg viewBox="0 0 40 40"><circle cx="14" cy="22" r="6" fill="#9966cc"/><circle cx="22" cy="20" r="6" fill="#9966cc"/><circle cx="26" cy="26" r="6" fill="#9966cc"/><circle cx="18" cy="28" r="6" fill="#9966cc"/></svg>`,
+        blue:   `<svg viewBox="0 0 40 40"><circle cx="14" cy="22" r="5" fill="#5588dd"/><circle cx="22" cy="22" r="5" fill="#5588dd"/><circle cx="26" cy="28" r="5" fill="#5588dd"/><circle cx="16" cy="28" r="5" fill="#5588dd"/></svg>`
+    };
+
+    let dragSession = null;
+
+    function setupPalette() {
+        const palette = document.getElementById('palette');
+        palette.innerHTML = '';
+        FRUIT_TYPES.forEach(t => {
+            const chip = document.createElement('div');
+            chip.className = 'chip';
+            chip.dataset.type = t;
+            chip.dataset.role = ROLE_LABEL[ROLE_BY_TYPE[t]];
+            chip.style.color = world().colors[t];
+            chip.innerHTML = FRUIT_GLYPH[t];
+            chip.addEventListener('pointerdown', e => startChipDrag(e, t));
+            palette.appendChild(chip);
+        });
+        palette.classList.add('show');
+    }
+
+    function refreshPaletteColors() {
+        document.querySelectorAll('#palette .chip').forEach(chip => {
+            const t = chip.dataset.type;
+            chip.style.color = world().colors[t];
+            const path = chip.querySelector('svg circle, svg path');
+            // (svg fills are static; color tint comes from container, drop-shadow uses currentColor)
+        });
+    }
+
+    function startChipDrag(e, type) {
+        e.preventDefault();
+        const ghost = document.getElementById('drag-ghost');
+        ghost.innerHTML = FRUIT_GLYPH[type];
+        ghost.style.color = world().colors[type];
+        ghost.style.left = e.clientX + 'px';
+        ghost.style.top = e.clientY + 'px';
+        ghost.classList.add('show');
+        dragSession = { kind: 'spawn', type, ghost, fruit: null };
+        window.addEventListener('pointermove', onDragMove);
+        window.addEventListener('pointerup', onDragUp, { once: true });
+    }
+
+    function onDragMove(e) {
+        if (!dragSession) return;
+        if (dragSession.ghost) {
+            dragSession.ghost.style.left = e.clientX + 'px';
+            dragSession.ghost.style.top = e.clientY + 'px';
+        }
+        if (dragSession.fruit) {
+            dragSession.fruit.tx = e.clientX;
+            dragSession.fruit.ty = e.clientY;
+            dragSession.fruit.x = e.clientX;
+            dragSession.fruit.y = e.clientY;
+            dragSession.fruit.sx = e.clientX;
+            dragSession.fruit.sy = e.clientY;
+            dragSession.fruit.lastSeen = performance.now();
+        }
+    }
+
+    function onDragUp(e) {
+        if (!dragSession) return;
+        window.removeEventListener('pointermove', onDragMove);
+        const ghost = dragSession.ghost;
+        if (ghost) ghost.classList.remove('show');
+
+        if (dragSession.kind === 'spawn') {
+            const overPalette = document.elementFromPoint(e.clientX, e.clientY)?.closest('#palette');
+            if (!overPalette) {
+                const role = ROLE_BY_TYPE[dragSession.type];
+                const def = ROLE_DEFAULTS[role];
+                const initialSize = 0.7 + 1.3 * (def.kDefault / def.n);
+                addFruit(dragSession.type, e.clientX, e.clientY, 'virtual', { size: initialSize });
+            }
+        } else if (dragSession.kind === 'move') {
+            const overPalette = document.elementFromPoint(e.clientX, e.clientY)?.closest('#palette');
+            if (overPalette) {
+                removeFruit(dragSession.fruit.id);
+            }
+        }
+        dragSession = null;
+    }
+
+    // Click-to-grab existing virtual fruits
+    function pickFruitAt(x, y) {
+        let best = null, bestD = 50 * 50;
+        for (const f of fruitState.values()) {
+            if (f.source !== 'virtual') continue;
+            const dx = f.x - x, dy = f.y - y;
+            const dd = dx * dx + dy * dy;
+            if (dd < bestD) { bestD = dd; best = f; }
+        }
+        return best;
+    }
+
+    function setupCanvasInteraction() {
+        const fg = document.getElementById('fg');
+        fg.addEventListener('pointerdown', e => {
+            if (e.target !== fg) return;
+            const f = pickFruitAt(e.clientX, e.clientY);
+            if (!f) {
+                // Tap on empty canvas = deselect
+                selectFruit(null);
+                return;
+            }
+            // Tap/drag distinguisher: defer the move until threshold passed
+            const startX = e.clientX, startY = e.clientY;
+            let escalated = false;
+
+            const onProbe = em => {
+                if (escalated) return;
+                if (Math.abs(em.clientX - startX) + Math.abs(em.clientY - startY) > TAP_PIXEL_THRESHOLD) {
+                    escalated = true;
+                    window.removeEventListener('pointermove', onProbe);
+                    window.removeEventListener('pointerup', onProbeUp);
+                    // Begin actual move-drag (only for virtual fruits; camera move would fight detection)
+                    if (f.source !== 'virtual') return;
+                    const ghost = document.getElementById('drag-ghost');
+                    ghost.innerHTML = FRUIT_GLYPH[f.type];
+                    ghost.style.color = world().colors[f.type];
+                    ghost.style.left = em.clientX + 'px';
+                    ghost.style.top = em.clientY + 'px';
+                    ghost.classList.add('show');
+                    dragSession = { kind: 'move', fruit: f, ghost };
+                    window.addEventListener('pointermove', onDragMove);
+                    window.addEventListener('pointerup', onDragUp, { once: true });
+                    onDragMove(em);
+                }
+            };
+            const onProbeUp = () => {
+                window.removeEventListener('pointermove', onProbe);
+                if (!escalated) selectFruit(f);
+            };
+            window.addEventListener('pointermove', onProbe);
+            window.addEventListener('pointerup', onProbeUp, { once: true });
+        });
+    }
+
+    function selectFruit(f) {
+        selectedFruit = f;
+        const popup = document.getElementById('fruit-popup');
+        if (!f) { popup.classList.remove('show'); return; }
+        // Camera fruits: no k/n editing (size is detected); show only mute + delete (delete is no-op for camera)
+        const isCamera = f.source === 'camera';
+        popup.querySelectorAll('.popup-row button').forEach(b => b.disabled = isCamera);
+        popup.querySelector('[data-act="del"]').disabled = isCamera;
+        updatePopupValues();
+        popup.classList.add('show');
+    }
+
+    function updatePopupValues() {
+        const f = selectedFruit;
+        if (!f) return;
+        document.getElementById('popup-k').textContent = f.k;
+        document.getElementById('popup-n').textContent = f.n;
+        const muteBtn = document.getElementById('popup-mute');
+        muteBtn.classList.toggle('active', f.muted);
+        muteBtn.textContent = f.muted ? 'Unmute' : 'Mute';
+    }
+
+    function setupPopupHandlers() {
+        const popup = document.getElementById('fruit-popup');
+        popup.addEventListener('pointerdown', e => e.stopPropagation());
+        popup.addEventListener('click', e => {
+            const btn = e.target.closest('button');
+            if (!btn || btn.disabled) return;
+            const f = selectedFruit;
+            if (!f) return;
+            const def = ROLE_DEFAULTS[f.role];
+            const act = btn.dataset.act;
+            if (act === 'k+') f.k = clamp(f.k + 1, def.kMin, Math.min(def.kMax, f.n - 1));
+            else if (act === 'k-') f.k = clamp(f.k - 1, def.kMin, def.kMax);
+            else if (act === 'n+') f.n = Math.min(32, f.n + 2);
+            else if (act === 'n-') f.n = Math.max(4, f.n - 2);
+            else if (act === 'mute') f.muted = !f.muted;
+            else if (act === 'del') { removeFruit(f.id); return; }
+            // Re-clamp k against new n
+            f.k = clamp(f.k, def.kMin, Math.min(def.kMax, f.n - 1));
+            // Visual size grows with k/n ratio so density is intuitively read
+            f.size = 0.7 + 1.3 * (f.k / f.n);
+            updateEuclidean(f);
+            updatePopupValues();
+        });
+    }
+
+    // Position popup near selected fruit each frame (in render loop)
+    function updatePopupPosition() {
+        const popup = document.getElementById('fruit-popup');
+        if (!popup.classList.contains('show')) return;
+        const f = selectedFruit;
+        if (!f) { popup.classList.remove('show'); return; }
+        const x = clamp(f.sx, 100, window.innerWidth - 100);
+        const y = clamp(f.sy, 160, window.innerHeight - 160);
+        popup.style.left = x + 'px';
+        popup.style.top = y + 'px';
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  RENDER
+    // ═══════════════════════════════════════════════════════════════
+    let bgCanvas, bgCtx, fgCanvas, fgCtx;
+    const particles = [];
+    const trails = [];
+
+    function setupCanvases() {
+        bgCanvas = document.getElementById('bg');
+        fgCanvas = document.getElementById('fg');
+        bgCtx = bgCanvas.getContext('2d');
+        fgCtx = fgCanvas.getContext('2d');
+        resizeCanvases();
+        window.addEventListener('resize', resizeCanvases);
+        window.addEventListener('pointermove', e => { mouseX = e.clientX; mouseY = e.clientY; });
+    }
+
+    function resizeCanvases() {
+        const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+        const w = window.innerWidth, h = window.innerHeight;
+        for (const c of [bgCanvas, fgCanvas]) {
+            c.width = Math.floor(w * dpr);
+            c.height = Math.floor(h * dpr);
+            c.style.width = w + 'px'; c.style.height = h + 'px';
+        }
+        bgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        fgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        cx = w / 2; cy = h / 2;
+        R = Math.min(w, h) * 0.42;
+        drawBackground();
+    }
+
+    function drawBackground() {
+        const w = bgCanvas.width / (window.devicePixelRatio || 1);
+        const h = bgCanvas.height / (window.devicePixelRatio || 1);
+        bgCtx.clearRect(0, 0, w, h);
+        const W = world();
+        const grad = bgCtx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(w, h) * 0.7);
+        grad.addColorStop(0, `rgb(${W.bgInner.join(',')})`);
+        grad.addColorStop(0.7, `rgb(${W.bgOuter.join(',')})`);
+        grad.addColorStop(1, '#020208');
+        bgCtx.fillStyle = grad;
+        bgCtx.fillRect(0, 0, w, h);
+
+        // Concentric loudness rings
+        bgCtx.save();
+        for (let i = 1; i <= 5; i++) {
+            const rr = R * (i / 5);
+            bgCtx.strokeStyle = `rgba(255,255,255,${0.04 + (5 - i) * 0.012})`;
+            bgCtx.lineWidth = 1;
+            bgCtx.beginPath();
+            bgCtx.arc(cx, cy, rr, 0, Math.PI * 2);
+            bgCtx.stroke();
+        }
+        // Center marker
+        bgCtx.fillStyle = 'rgba(255,255,255,0.32)';
+        bgCtx.beginPath(); bgCtx.arc(cx, cy, 3, 0, Math.PI * 2); bgCtx.fill();
+        // Edge bloom
+        const edgeGrad = bgCtx.createRadialGradient(cx, cy, R * 0.95, cx, cy, R * 1.18);
+        edgeGrad.addColorStop(0, 'rgba(255,255,255,0)');
+        edgeGrad.addColorStop(0.5, 'rgba(187, 136, 255, 0.06)');
+        edgeGrad.addColorStop(1, 'rgba(255,255,255,0)');
+        bgCtx.fillStyle = edgeGrad;
+        bgCtx.fillRect(0, 0, w, h);
+        bgCtx.restore();
+    }
+
+    function spawnParticle(x, y, color) {
+        if (perfDegrade >= 2) return;
+        if (particles.length >= MAX_PARTICLES) particles.shift();
+        const a = Math.random() * Math.PI * 2;
+        const sp = 0.6 + Math.random() * 1.6;
+        particles.push({
+            x, y,
+            vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+            life: 1, decay: 0.012 + Math.random() * 0.015,
+            size: 1 + Math.random() * 2.2, color
+        });
+    }
+
+    function spawnTrail(fruit, color) {
+        if (perfDegrade >= 1) return;
+        if (trails.length >= MAX_TRAILS) trails.shift();
+        const mx = (fruit.sx + cx) / 2 + (Math.random() - 0.5) * 60;
+        const my = (fruit.sy + cy) / 2 + (Math.random() - 0.5) * 60;
+        trails.push({
+            x: fruit.sx, y: fruit.sy, tx: cx, ty: cy,
+            mx, my, life: 1, decay: 0.04, color
+        });
+    }
+
+    function pulseFruit(f) {
+        f.pulseT = 1.0;
+        const c = world().colors[f.type];
+        for (let i = 0; i < 5; i++) spawnParticle(f.sx, f.sy, c);
+    }
+
+    function drawSilhouette() {
+        if (!camera.stream || !camera.showSilhouette || !camera.videoEl.videoWidth) return;
+        // Draw the live video tinted into the table circle
+        fgCtx.save();
+        fgCtx.beginPath();
+        fgCtx.arc(cx, cy, R * 0.96, 0, Math.PI * 2);
+        fgCtx.clip();
+        fgCtx.globalAlpha = 0.18;
+        fgCtx.globalCompositeOperation = 'lighter';
+        const vw = camera.videoEl.videoWidth, vh = camera.videoEl.videoHeight;
+        const scale = (R * 2) / Math.min(vw, vh);
+        const dw = vw * scale, dh = vh * scale;
+        if (camera.mirror) {
+            fgCtx.translate(cx + dw / 2, cy - dh / 2);
+            fgCtx.scale(-1, 1);
+            fgCtx.drawImage(camera.videoEl, 0, 0, dw, dh);
+        } else {
+            fgCtx.drawImage(camera.videoEl, cx - dw / 2, cy - dh / 2, dw, dh);
+        }
+        fgCtx.restore();
+    }
+
+    function render(now) {
+        const w = window.innerWidth, h = window.innerHeight;
+
+        // FPS / adaptive degradation
+        const dt = now - lastFrameMs;
+        lastFrameMs = now;
+        if (dt > 28) frameDropCount++; else frameDropCount = Math.max(0, frameDropCount - 1);
+        if (frameDropCount > 30 && perfDegrade < 2) { perfDegrade++; frameDropCount = 0; }
+        else if (frameDropCount === 0 && perfDegrade > 0 && Math.random() < 0.001) { perfDegrade--; }
+
+        // Background pulse
+        if (pulseScale > 0) pulseScale *= 0.94;
+
+        // Trail-fade clear
+        fgCtx.fillStyle = 'rgba(6, 7, 13, 0.30)';
+        fgCtx.fillRect(0, 0, w, h);
+
+        // Optional camera silhouette
+        drawSilhouette();
+
+        // Background pulse glow
+        if (pulseScale > 0.02) {
+            const grad = fgCtx.createRadialGradient(cx, cy, 0, cx, cy, R * (1 + pulseScale * 0.3));
+            const wc = world().colors.red;
+            grad.addColorStop(0, hexToRgba(wc, 0.18 * pulseScale));
+            grad.addColorStop(1, hexToRgba(wc, 0));
+            fgCtx.fillStyle = grad;
+            fgCtx.fillRect(0, 0, w, h);
+        }
+
+        // Trails (curves to center)
+        for (let i = trails.length - 1; i >= 0; i--) {
+            const t = trails[i];
+            t.life -= t.decay;
+            if (t.life <= 0) { trails.splice(i, 1); continue; }
+            fgCtx.save();
+            fgCtx.globalCompositeOperation = 'lighter';
+            fgCtx.strokeStyle = hexToRgba(t.color, t.life * 0.7);
+            fgCtx.lineWidth = 2 * t.life;
+            fgCtx.beginPath();
+            fgCtx.moveTo(t.x, t.y);
+            fgCtx.quadraticCurveTo(t.mx, t.my, t.tx, t.ty);
+            fgCtx.stroke();
+            fgCtx.restore();
+        }
+
+        // Fruits — auras + beat ring + face
+        const Wd = world();
+        const stepNow = stepCount;
+        for (const f of fruitState.values()) {
+            // Smooth virtual fruits toward target
+            if (f.source === 'virtual') {
+                f.sx = lerp(f.sx, f.tx, 0.25);
+                f.sy = lerp(f.sy, f.ty, 0.25);
+                f.x = f.sx; f.y = f.sy;
+            }
+            f.wobble += 0.03;
+            const wob = Math.sin(f.wobble) * 2.5;
+            const loud = loudnessOf(f);
+            // Base visual size scales with f.size (Euclidean density visual feedback)
+            const baseSize = (24 + loud * 18) * f.size;
+            const size = baseSize * (1 + f.pulseT * 0.5) + wob;
+            const color = Wd.colors[f.type];
+            const isSelected = (selectedFruit && selectedFruit.id === f.id);
+
+            // Beat ring (selected only) — n dots with the current Euclidean step highlighted
+            if (isSelected) {
+                drawBeatRing(f, size, color, stepNow);
+            }
+
+            // Aura (dimmed if muted)
+            const auraAlpha = f.muted ? 0.18 : 1;
+            fgCtx.save();
+            fgCtx.globalCompositeOperation = 'lighter';
+            const glow = fgCtx.createRadialGradient(f.sx, f.sy, 0, f.sx, f.sy, size * 2.4);
+            glow.addColorStop(0, hexToRgba(color, (0.55 * (0.5 + loud * 0.5) + f.pulseT * 0.3) * auraAlpha));
+            glow.addColorStop(0.4, hexToRgba(color, (0.15 + f.pulseT * 0.1) * auraAlpha));
+            glow.addColorStop(1, hexToRgba(color, 0));
+            fgCtx.fillStyle = glow;
+            fgCtx.fillRect(f.sx - size * 2.4, f.sy - size * 2.4, size * 4.8, size * 4.8);
+            fgCtx.restore();
+
+            // Core dot (the "body")
+            fgCtx.fillStyle = f.muted ? hexToRgba('#888', 0.6) : hexToRgba(color, 0.9);
+            fgCtx.beginPath();
+            fgCtx.arc(f.sx, f.sy, size * 0.32, 0, Math.PI * 2);
+            fgCtx.fill();
+
+            // Role-shape accent
+            if (!f.muted) drawRoleAccent(f, size, color);
+
+            // Eyes (face) — pupils track cursor; X-eyes when muted
+            drawFruitFace(f, size);
+
+            // Pulse decay
+            if (f.pulseT > 0) f.pulseT *= 0.88;
+
+            // Source ring (virtual = solid, camera = dashed; selected = thicker bright ring)
+            if (isSelected) {
+                fgCtx.strokeStyle = hexToRgba('#ffffff', 0.65);
+                fgCtx.lineWidth = 2;
+                fgCtx.setLineDash([6, 4]);
+            } else {
+                fgCtx.strokeStyle = hexToRgba('#ffffff', f.source === 'camera' ? 0.18 : 0.32);
+                fgCtx.lineWidth = 1.2;
+                if (f.source === 'camera') fgCtx.setLineDash([4, 4]);
+            }
+            fgCtx.beginPath();
+            fgCtx.arc(f.sx, f.sy, size * 0.55, 0, Math.PI * 2);
+            fgCtx.stroke();
+            fgCtx.setLineDash([]);
+        }
+
+        // Particles
+        for (let i = particles.length - 1; i >= 0; i--) {
+            const p = particles[i];
+            p.x += p.vx; p.y += p.vy;
+            p.vx *= 0.96; p.vy *= 0.96;
+            p.life -= p.decay;
+            if (p.life <= 0) { particles.splice(i, 1); continue; }
+            fgCtx.fillStyle = hexToRgba(p.color, p.life);
+            fgCtx.beginPath();
+            fgCtx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+            fgCtx.fill();
+        }
+
+        // Detection tick
+        detectFrame(now);
+
+        // Position popup
+        updatePopupPosition();
+
+        requestAnimationFrame(render);
+    }
+
+    function drawRoleAccent(f, size, color) {
+        fgCtx.save();
+        fgCtx.translate(f.sx, f.sy);
+        fgCtx.strokeStyle = hexToRgba(color, 0.55);
+        fgCtx.fillStyle = hexToRgba(color, 0.85);
+        fgCtx.lineWidth = 1.6;
+        const role = f.role;
+        const s = size * 0.18;
+        if (role === 'chord') {
+            // soft halo arcs
+            fgCtx.beginPath();
+            fgCtx.arc(0, 0, size * 0.7, 0, Math.PI * 1.3);
+            fgCtx.stroke();
+        } else if (role === 'melody') {
+            // comet streak
+            fgCtx.beginPath();
+            fgCtx.moveTo(-size * 0.4, 0);
+            fgCtx.lineTo(size * 0.4, 0);
+            fgCtx.stroke();
+        } else if (role === 'bass') {
+            // thick base bar
+            fgCtx.fillRect(-size * 0.45, size * 0.35, size * 0.9, 3);
+        } else if (role === 'perc') {
+            // sharp triangle
+            fgCtx.beginPath();
+            fgCtx.moveTo(0, -s); fgCtx.lineTo(s, s); fgCtx.lineTo(-s, s); fgCtx.closePath();
+            fgCtx.fill();
+        } else if (role === 'atmos') {
+            // drifting orbits
+            for (let k = 0; k < 3; k++) {
+                fgCtx.beginPath();
+                fgCtx.arc(Math.cos(f.wobble + k) * size * 0.4, Math.sin(f.wobble + k) * size * 0.4, 2, 0, Math.PI * 2);
+                fgCtx.fill();
+            }
+        } else if (role === 'bell') {
+            // sparkle
+            fgCtx.beginPath();
+            for (let k = 0; k < 4; k++) {
+                const a = k * Math.PI / 2 + f.wobble * 0.3;
+                fgCtx.moveTo(0, 0);
+                fgCtx.lineTo(Math.cos(a) * size * 0.4, Math.sin(a) * size * 0.4);
+            }
+            fgCtx.stroke();
+        }
+        fgCtx.restore();
+    }
+
+    // Beat ring (only on selected fruit) — n step indicators around the fruit,
+    // active step (the one currently firing) highlighted brightly.
+    function drawBeatRing(f, size, color, step) {
+        const radius = size * 0.95 + 14;
+        const liveStep = ((step + f.phase) % f.n + f.n) % f.n;
+        const angleStep = (Math.PI * 2) / f.n;
+
+        // Subtle outline polygon
+        fgCtx.save();
+        fgCtx.strokeStyle = hexToRgba(color, 0.18);
+        fgCtx.lineWidth = 1;
+        fgCtx.beginPath();
+        for (let i = 0; i < f.n; i++) {
+            const a = i * angleStep - Math.PI / 2;
+            const px = f.sx + Math.cos(a) * radius;
+            const py = f.sy + Math.sin(a) * radius;
+            if (i === 0) fgCtx.moveTo(px, py); else fgCtx.lineTo(px, py);
+        }
+        fgCtx.closePath();
+        fgCtx.stroke();
+        fgCtx.restore();
+
+        // Step dots
+        for (let i = 0; i < f.n; i++) {
+            const a = i * angleStep - Math.PI / 2;
+            const px = f.sx + Math.cos(a) * radius;
+            const py = f.sy + Math.sin(a) * radius;
+            const active = f.seq[i] === 1;
+            const isLive = (i === liveStep) && active && !f.muted;
+            const dotR = isLive ? 5 : (active ? 3 : 1.6);
+            fgCtx.fillStyle = isLive
+                ? '#ffffff'
+                : (active ? hexToRgba(color, 0.85) : 'rgba(255,255,255,0.18)');
+            fgCtx.beginPath();
+            fgCtx.arc(px, py, dotR, 0, Math.PI * 2);
+            fgCtx.fill();
+        }
+    }
+
+    // Eye-face: two eyeballs + pupils that track the cursor; X eyes if muted
+    function drawFruitFace(f, size) {
+        const eyeOff = size * 0.20;
+        const eyeR = Math.max(2, size * 0.11);
+        const ex = f.sx, ey = f.sy - size * 0.05;
+        if (f.muted) {
+            // X eyes
+            fgCtx.save();
+            fgCtx.strokeStyle = 'rgba(20,20,30,0.75)';
+            fgCtx.lineWidth = 1.6;
+            for (const dx of [-eyeOff, eyeOff]) {
+                fgCtx.beginPath();
+                fgCtx.moveTo(ex + dx - eyeR, ey - eyeR);
+                fgCtx.lineTo(ex + dx + eyeR, ey + eyeR);
+                fgCtx.moveTo(ex + dx + eyeR, ey - eyeR);
+                fgCtx.lineTo(ex + dx - eyeR, ey + eyeR);
+                fgCtx.stroke();
+            }
+            fgCtx.restore();
+            return;
+        }
+        // White eye background
+        fgCtx.fillStyle = 'rgba(255,255,255,0.95)';
+        fgCtx.beginPath(); fgCtx.arc(ex - eyeOff, ey, eyeR, 0, Math.PI * 2); fgCtx.fill();
+        fgCtx.beginPath(); fgCtx.arc(ex + eyeOff, ey, eyeR, 0, Math.PI * 2); fgCtx.fill();
+        // Pupils — track the cursor (clamped within eye radius)
+        const dx = mouseX - ex, dy = mouseY - ey;
+        const dist = Math.sqrt(dx * dx + dy * dy) + 0.001;
+        const off = Math.min(eyeR * 0.45, dist * 0.06);
+        const px = (dx / dist) * off, py = (dy / dist) * off;
+        fgCtx.fillStyle = '#0c0e18';
+        fgCtx.beginPath(); fgCtx.arc(ex - eyeOff + px, ey + py, eyeR * 0.55, 0, Math.PI * 2); fgCtx.fill();
+        fgCtx.beginPath(); fgCtx.arc(ex + eyeOff + px, ey + py, eyeR * 0.55, 0, Math.PI * 2); fgCtx.fill();
+        // Tiny highlight
+        fgCtx.fillStyle = 'rgba(255,255,255,0.85)';
+        fgCtx.beginPath(); fgCtx.arc(ex - eyeOff + px - eyeR * 0.18, ey + py - eyeR * 0.18, eyeR * 0.18, 0, Math.PI * 2); fgCtx.fill();
+        fgCtx.beginPath(); fgCtx.arc(ex + eyeOff + px - eyeR * 0.18, ey + py - eyeR * 0.18, eyeR * 0.18, 0, Math.PI * 2); fgCtx.fill();
+    }
+
+    function hexToRgba(hex, a) {
+        if (hex[0] === '#') hex = hex.slice(1);
+        if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+        const r = parseInt(hex.slice(0, 2), 16);
+        const g = parseInt(hex.slice(2, 4), 16);
+        const b = parseInt(hex.slice(4, 6), 16);
+        return `rgba(${r},${g},${b},${a})`;
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  UI / WORLDS
+    // ═══════════════════════════════════════════════════════════════
+    function setWorld(name) {
+        if (!WORLDS[name] || name === currentWorldKey) return;
+        prevWorldKey = currentWorldKey;
+        currentWorldKey = name;
+        if (audioReady) Tone.Transport.bpm.rampTo(WORLDS[name].bpm, 1.5);
+        document.getElementById('tempo').value = WORLDS[name].bpm;
+        document.getElementById('tempo-value').textContent = WORLDS[name].bpm;
+        document.querySelectorAll('.world-btn').forEach(b => {
+            b.classList.toggle('active', b.dataset.world === name);
+        });
+        drawBackground();
+        refreshPaletteColors();
+        showToast(`World: ${WORLDS[name].name}`);
+    }
+
+    let toastTimer;
+    function showToast(msg) {
+        const el = document.getElementById('toast');
+        el.textContent = msg;
+        el.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => el.classList.remove('show'), 2400);
     }
 
     function setupUI() {
-        document.getElementById('mode-btn').onclick=()=>{
-            if(!isAudioInitialized) return;
-            setMode(currentMode+1);
-            let col=color(set.color).levels;
-            bgFlashes.push({color:col,alpha:100,decay:5});
-        };
-        document.getElementById('btn-k-plus').onclick=()=>{if(selectedCharacter&&selectedCharacter.k<selectedCharacter.n){selectedCharacter.k++;selectedCharacter.updateEuclidean();}};
-        document.getElementById('btn-k-minus').onclick=()=>{if(selectedCharacter&&selectedCharacter.k>1){selectedCharacter.k--;selectedCharacter.updateEuclidean();}};
-        document.getElementById('btn-n-plus').onclick=()=>{if(selectedCharacter&&selectedCharacter.n<32){selectedCharacter.n++;selectedCharacter.updateEuclidean();}};
-        document.getElementById('btn-n-minus').onclick=()=>{if(selectedCharacter&&selectedCharacter.n>selectedCharacter.k&&selectedCharacter.n>2){selectedCharacter.n--;selectedCharacter.updateEuclidean();}};
-    }
-
-    function updateUI() {
-        const btn=document.getElementById('mode-btn');
-        btn.style.borderColor=set.color;
-        document.querySelectorAll('.mode-dot').forEach((dot,i)=>{
-            dot.style.background=i===currentMode?set.color:'rgba(255,255,255,.2)';
-            dot.style.boxShadow=i===currentMode?`0 0 8px ${set.color}`:'none';
+        // World buttons
+        document.querySelectorAll('.world-btn').forEach(b => {
+            b.addEventListener('click', () => setWorld(b.dataset.world));
         });
-    }
-
-    function selectCharacter(c){if(selectedCharacter) selectedCharacter.isSelected=false; selectedCharacter=c; if(c) c.isSelected=true;}
-
-    function spawnParticles(x,y,c,count,maxSpeed){const shapes=['circle','rect','triangle'];for(let i=0;i<count;i++) particles.push({x,y,vx:random(-maxSpeed,maxSpeed),vy:random(-maxSpeed,maxSpeed),vr:random(-.2,.2),rotation:random(TWO_PI),size:random(10,30),c,alpha:255,decay:random(2,5),shape:random(shapes)});}
-    function spawnRipples(x,y,c,count){for(let i=0;i<count;i++) ripples.push({x,y,size:10,speed:random(5,20),weight:random(2,8),c,alpha:255,decay:random(3,8)});}
-
-    // ── CHARACTER ──
-    class Character {
-        constructor(role,x,y,k,n) {
-            this.role=role; this.x=x; this.y=y; this.tx=x; this.ty=y;
-            this.baseSize=['kick','bass','sub'].includes(role)?40:['melody','reply'].includes(role)?32:25;
-            this.size=this.baseSize;
-            this.c=color(random([set.color,set.accent,'#ffffff'])).levels;
-            this.active=true; this.autoMuted=false; this.pulseTimer=0; this.isSelected=false;
-            this.shape={kick:'rect',hat:'triangle',snare:'hexagon',openhat:'pentagon',rim:'cross',bass:'ellipse',sub:'circle',melody:'star',reply:'diamond',arp:'zigzag',prism:'octagon',bloom:'flower',ghost:'cloud',pulse:'dot',pad:'wave'}[role]||'circle';
-            this.k=k; this.n=n; this.sequence=[];
-            this.updateEuclidean();
-            this.noteIndex=floor(random(10));
-        }
-
-        updateEuclidean(){this.sequence=[];for(let i=0;i<this.n;i++) this.sequence.push((i*this.k)%this.n<this.k?1:0);}
-
-        playSound(time,step) {
-            let sc=set.scale;
-            if(this.role==='kick') synths.kick.triggerAttackRelease("C1","8n",time);
-            else if(this.role==='hat') synths.hat.triggerAttackRelease("16n",time);
-            else if(this.role==='snare') synths.snare.triggerAttackRelease("16n",time);
-            else if(this.role==='openhat') synths.openhat.triggerAttackRelease("8n",time);
-            else if(this.role==='rim') synths.rim.triggerAttackRelease("G4","32n",time);
-            else if(this.role==='bass') synths.bass.triggerAttackRelease(random(sc.slice(0,3)),"8n",time);
-            else if(this.role==='sub') synths.sub.triggerAttackRelease(sc[0].replace(/\d/,'1'),"4n",time);
-            else if(this.role==='melody'){synths.solo.triggerAttackRelease(sc[this.noteIndex%sc.length],"8n",time); this.noteIndex++;}
-            else if(this.role==='reply'){synths.reply.triggerAttackRelease(sc[(this.noteIndex+3)%sc.length],"8n",time); this.noteIndex++;}
-            else if(this.role==='arp'){synths.arp.triggerAttackRelease(sc[this.noteIndex%sc.length],"16n",time); this.noteIndex++;}
-            else if(this.role==='prism') synths.prism.triggerAttackRelease(random(sc.slice(5)),"16n",time);
-            else if(this.role==='bloom') synths.bloom.triggerAttackRelease(random(sc.slice(4)),"16n",time);
-            else if(this.role==='ghost') synths.ghost.triggerAttackRelease("8n",time);
-            else if(this.role==='pulse') synths.pulse.triggerAttackRelease(sc[4]||"E4","16n",time);
-            else if(this.role==='pad') synths.pad.triggerAttackRelease(random(set.padScale),"4n",time);
-        }
-
-        pulse(){if(this.active){this.pulseTimer=15;this.size=this.baseSize*1.4;spawnRipples(this.x,this.y,this.c,1);}}
-
-        update(){
-            if(this.active){this.x=lerp(this.x,this.tx,0.05);this.y=lerp(this.y,this.ty,0.05);if(!this.isSelected&&!gestureState.active&&frameCount%60===0&&random()>0.7){this.tx=this.x+random(-40,40);this.ty=this.y+random(-40,40);}}
-            this.tx=constrain(this.tx,50,width-50);this.ty=constrain(this.ty,50,height-50);
-            this.size=lerp(this.size,this.baseSize,0.1);if(this.pulseTimer>0)this.pulseTimer--;
-        }
-
-        display(){
-            push();translate(this.x,this.y);
-            let isHovered=dist(mouseX,mouseY,this.x,this.y)<this.baseSize+30;
-            if(this.isSelected||(isHovered&&!gestureState.active)){
-                let pr=this.baseSize+25, as=TWO_PI/this.n;
-                stroke(this.c[0],this.c[1],this.c[2],this.active?50:20);strokeWeight(1);fill(this.c[0],this.c[1],this.c[2],this.active?10:5);
-                beginShape();for(let i=0;i<this.n;i++){let a=i*as-HALF_PI;vertex(cos(a)*pr,sin(a)*pr);}endShape(CLOSE);
-                let ls=stepCount%this.n;
-                for(let i=0;i<this.n;i++){let a=i*as-HALF_PI,px=cos(a)*pr,py=sin(a)*pr;noStroke();if(!this.active)fill(30,30,30,100);else if(this.sequence[i]===1)fill(this.c[0],this.c[1],this.c[2],200);else fill(50,50,50,150);let ns=(this.active&&i===ls)?12:6;if(this.active&&i===ls)fill(255);ellipse(px,py,ns);}
-                if(this.isSelected){noFill();stroke(255,150);strokeWeight(2);drawingContext.setLineDash([5,5]);ellipse(0,0,pr*2+20);drawingContext.setLineDash([]);}
+        // Tempo slider
+        const tempo = document.getElementById('tempo');
+        const tval = document.getElementById('tempo-value');
+        tempo.addEventListener('input', () => {
+            const v = parseInt(tempo.value);
+            tval.textContent = v;
+            if (audioReady) Tone.Transport.bpm.rampTo(v, 0.3);
+        });
+        // Camera select
+        const sel = document.getElementById('camera-select');
+        sel.addEventListener('change', async () => {
+            const v = sel.value;
+            if (v === 'enable') {
+                const ok = await unlockLabels();
+                if (ok) {
+                    await refreshCameraList();
+                    // Auto-pick first real camera
+                    const real = [...sel.options].find(o => o.value !== 'off' && o.value !== 'enable');
+                    if (real) { sel.value = real.value; await selectCamera(real.value); }
+                    else sel.value = 'off';
+                } else {
+                    sel.value = 'off';
+                }
+            } else {
+                await selectCamera(v);
             }
-            noStroke();let al=this.active?220:80;if(!this.active)fill(60,60,60,al);else fill(this.c[0],this.c[1],this.c[2],al);
-            let bounce=(this.active&&this.pulseTimer>0)?sin(frameCount*0.5)*10:0;translate(0,bounce);
-            this.drawShape();
-            let ea=this.active?255:30;fill(ea);let es=this.baseSize*0.25;
-            let ex=constrain((mouseX-this.x)*0.05,-this.baseSize/4,this.baseSize/4),ey=constrain((mouseY-this.y)*0.05,-this.baseSize/4,this.baseSize/4);
-            if(this.active){ellipse(-this.baseSize/4+ex,ey,es);ellipse(this.baseSize/4+ex,ey,es);fill(0);ellipse(-this.baseSize/4+ex,ey,es/2);ellipse(this.baseSize/4+ex,ey,es/2);}
-            else{stroke(40);strokeWeight(2);line(-this.baseSize/4-es/2,0,-this.baseSize/4+es/2,0);line(this.baseSize/4-es/2,0,this.baseSize/4+es/2,0);noStroke();}
-            pop();
+        });
+        document.getElementById('mirror-toggle').addEventListener('change', e => {
+            camera.mirror = e.target.checked;
+            document.getElementById('cam-preview').classList.toggle('mirror', camera.mirror);
+        });
+        document.getElementById('silhouette-toggle').addEventListener('change', e => {
+            camera.showSilhouette = e.target.checked;
+        });
+        // Hot-plug
+        if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+            navigator.mediaDevices.addEventListener('devicechange', async () => {
+                const before = [...sel.options].map(o => o.value);
+                await refreshCameraList();
+                const after = [...sel.options].map(o => o.value);
+                const newOnes = after.filter(v => !before.includes(v) && v !== 'off' && v !== 'enable');
+                if (newOnes.length > 0) {
+                    const opt = [...sel.options].find(o => o.value === newOnes[0]);
+                    if (opt && isIphoneLabel(opt.textContent)) {
+                        showToast('📱 iPhone camera detected — tap "Use iPhone"');
+                        document.getElementById('iphone-btn').classList.add('active');
+                    }
+                }
+            });
         }
 
-        drawShape(){
-            let s=this.size;
-            if(this.shape==='rect'){rectMode(CENTER);rect(0,0,s,s,8);}
-            else if(this.shape==='ellipse')ellipse(0,0,s*1.2,s*0.8);
-            else if(this.shape==='circle')ellipse(0,0,s);
-            else if(this.shape==='triangle')triangle(-s/2,s/2,s/2,s/2,0,-s/2);
-            else if(this.shape==='star')this._star(0,0,s/3,s/1.5,5);
-            else if(this.shape==='hexagon')this._poly(0,0,s/1.2,6);
-            else if(this.shape==='pentagon')this._poly(0,0,s/1.2,5);
-            else if(this.shape==='octagon')this._poly(0,0,s/1.2,8);
-            else if(this.shape==='diamond'){push();rotate(QUARTER_PI);rectMode(CENTER);rect(0,0,s*0.8,s*0.8,4);pop();}
-            else if(this.shape==='cloud'){ellipse(0,0,s,s*0.6);ellipse(-s*0.3,-s*0.1,s*0.6);ellipse(s*0.3,-s*0.2,s*0.7);}
-            else if(this.shape==='cross'){rectMode(CENTER);rect(0,0,s*0.3,s,3);rect(0,0,s,s*0.3,3);}
-            else if(this.shape==='zigzag'){beginShape();let w=s*0.6,h=s*0.5;vertex(-w,h);vertex(-w/2,-h);vertex(0,h);vertex(w/2,-h);vertex(w,h);endShape();}
-            else if(this.shape==='flower'){for(let a=0;a<TWO_PI;a+=TWO_PI/5)ellipse(cos(a)*s*0.3,sin(a)*s*0.3,s*0.5);ellipse(0,0,s*0.4);}
-            else if(this.shape==='dot'){ellipse(0,0,s*0.6);noFill();stroke(this.active?this.c:[60,60,60]);strokeWeight(2);ellipse(0,0,s);noStroke();}
-            else ellipse(0,0,s);
-        }
-        _star(x,y,r1,r2,n){let a=TWO_PI/n,h=a/2;beginShape();for(let i=-PI/2;i<TWO_PI-PI/2;i+=a){vertex(x+cos(i)*r2,y+sin(i)*r2);vertex(x+cos(i+h)*r1,y+sin(i+h)*r1);}endShape(CLOSE);}
-        _poly(x,y,r,n){let a=TWO_PI/n;beginShape();for(let i=0;i<TWO_PI;i+=a)vertex(x+cos(i)*r,y+sin(i)*r);endShape(CLOSE);}
+        // iPhone quick-button
+        document.getElementById('iphone-btn').addEventListener('click', useIphone);
     }
+
+    function isIphoneLabel(s) {
+        return /iphone|ios|continuity/i.test(s || '');
+    }
+
+    async function useIphone() {
+        const sel = document.getElementById('camera-select');
+        const ok = await unlockLabels();
+        if (!ok) return;
+        await refreshCameraList();
+        const opts = [...sel.options];
+        const iphoneOpt = opts.find(o => isIphoneLabel(o.textContent));
+        if (iphoneOpt) {
+            sel.value = iphoneOpt.value;
+            await selectCamera(iphoneOpt.value);
+            showToast(`📱 Connected to ${iphoneOpt.textContent}`);
+            document.getElementById('iphone-btn').classList.add('active');
+        } else {
+            showToast('No iPhone detected. On macOS Sonoma+: unlock your iPhone, then enable Continuity Camera in Control Centre. Plugged-in iPhones over USB also appear here.');
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  BOOT
+    // ═══════════════════════════════════════════════════════════════
+    async function begin() {
+        document.getElementById('splash').classList.add('hide');
+        document.getElementById('camera-panel').classList.add('show');
+        document.getElementById('world-panel').classList.add('show');
+
+        // Audio
+        await initAudio();
+
+        // Restore saved camera choice
+        const savedId = localStorage.getItem('fruitTable.cameraId');
+        if (savedId && savedId !== 'off') {
+            const ok = await unlockLabels();
+            if (ok) {
+                await refreshCameraList();
+                const sel = document.getElementById('camera-select');
+                if ([...sel.options].some(o => o.value === savedId)) {
+                    sel.value = savedId;
+                    await selectCamera(savedId);
+                }
+            }
+        }
+    }
+
+    function init() {
+        camera.videoEl = document.getElementById('proc');
+        camera.previewEl = document.getElementById('cam-preview');
+        camera.offCanvas = document.createElement('canvas');
+        camera.offCanvas.width = PROC_W; camera.offCanvas.height = PROC_H;
+        camera.offCtx = camera.offCanvas.getContext('2d', { willReadFrequently: true });
+
+        setupCanvases();
+        setupPalette();
+        setupCanvasInteraction();
+        setupPopupHandlers();
+        setupUI();
+
+        document.getElementById('begin').addEventListener('click', begin);
+        // Keyboard shortcut
+        window.addEventListener('keydown', e => {
+            if (e.key === '1') setWorld('daydream');
+            else if (e.key === '2') setWorld('twilight');
+            else if (e.key === '3') setWorld('storm');
+        });
+
+        requestAnimationFrame(render);
+    }
+
+    init();
     </script>
 </body>
 </html>
