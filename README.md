@@ -56,6 +56,26 @@ flowchart LR
     J --> L[(Canvas)]
 ```
 
+## Camera Interaction
+
+The camera view turns the clock table into an augmented performance surface. With the camera off, the work behaves like a virtual fruit sequencer. With the camera on, the live video feed appears inside the playable circle and detected fruit colours become animated musical voices.
+
+### Camera Off
+
+![Camera off empty table](docs/screenshots/camera-off-empty.png)
+
+### Camera On, Empty Table
+
+![Camera on empty table](docs/screenshots/camera-on-empty.png)
+
+### Camera On, Fruits Detected
+
+![Camera on with detected fruits](docs/screenshots/camera-on-fruits.png)
+
+### Camera On, Fruits Mapped To Notes
+
+![Camera on with fruits and designated notes](docs/screenshots/camera-on-fruits-notes.png)
+
 ## The Five Modes
 
 Each mode is a complete musical world: scale, tempo, instrument roster, filter and effects character. Switch modes with the dial button in the top-left.
