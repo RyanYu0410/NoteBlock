@@ -93,6 +93,16 @@ const MIN_BLOB_CELLS = 5;
 const COLOR_MIN_BLOB_CELLS = { orange: 16, blue: 3 };
 const VOICE_CAP_PER_COLOR = 3;
 
+// Camera detect scratch buffers (reused across ticks — was reallocated each call)
+const _DETECT_CELL = 3;
+const _DETECT_COLS = (PROC_W / _DETECT_CELL) | 0;
+const _DETECT_ROWS = (PROC_H / _DETECT_CELL) | 0;
+const _detectGrid    = new Int8Array(_DETECT_COLS * _DETECT_ROWS);
+const _detectVisited = new Uint8Array(_DETECT_COLS * _DETECT_ROWS);
+const _detectStack   = new Int32Array(_DETECT_COLS * _DETECT_ROWS);
+const _COLOR_TYPE_IDX = { red: 1, orange: 2, yellow: 3, green: 4, blue: 5, purple: 6 };
+const _COLOR_IDX_TYPE = ['', 'red', 'orange', 'yellow', 'green', 'blue', 'purple'];
+
 let currentMode = 0;
 let set = SETS[0];
 let isAudioInitialized = false;
@@ -234,9 +244,80 @@ function angleToK(x, y) { return CLOCK_K_VALUES[angleToSector(x, y)]; }
 // Per-fruit size multipliers; fruit size controls texture/material (note duration).
 const SIZE_LEVELS = [0.55, 0.75, 1.0, 1.35, 1.8];
 const SIZE_DEFAULT_INDEX = 2;
+// Memoize Tone.Time(...).toSeconds() — string parsing per note trigger is wasteful.
+const _durBase = Object.create(null);
 function durSec(noteString, mult) {
-    try { return Tone.Time(noteString).toSeconds() * (mult || 1); }
-    catch (e) { return 0.25 * (mult || 1); }
+    let base = _durBase[noteString];
+    if (base === undefined) {
+        try { base = Tone.Time(noteString).toSeconds(); }
+        catch (e) { base = 0.25; }
+        _durBase[noteString] = base;
+    }
+    return base * (mult || 1);
+}
+
+// ── PERF CACHES ──
+// Frame-scoped layout values populated once per draw() call.
+const frameCache = { tableR: 0, tableR2: 1, hubX: 0, hubY: 0, hoveredChar: null };
+// DOM refs cached at init() so draw() doesn't hit getElementById each frame.
+const $$ = { iconPanel: null, iconPanelDisplayed: false, iconPanelLastX: -1, iconPanelLastY: -1 };
+// Cached unit-circle rings per `n` for character step indicators.
+const _ringCache = new Map();
+function getUnitRing(n) {
+    let r = _ringCache.get(n);
+    if (!r) {
+        r = new Float32Array(n * 2);
+        const off = -Math.PI / 2;
+        const step = (Math.PI * 2) / n;
+        for (let i = 0; i < n; i++) {
+            const a = off + i * step;
+            r[i * 2] = Math.cos(a);
+            r[i * 2 + 1] = Math.sin(a);
+        }
+        _ringCache.set(n, r);
+    }
+    return r;
+}
+// Cached clock sector line endpoints; rebuilt only when tableR changes.
+const _clockSectorPts = new Float32Array(CLOCK_SECTORS * 4);
+let _clockTableR = -1;
+function rebuildClockGeometry(tableR) {
+    const sectorWidth = (Math.PI * 2) / CLOCK_SECTORS;
+    const inner = hub.radius + 8;
+    for (let i = 0; i < CLOCK_SECTORS; i++) {
+        const a = -Math.PI / 2 + i * sectorWidth;
+        const c = Math.cos(a), s = Math.sin(a);
+        _clockSectorPts[i * 4]     = c * inner;
+        _clockSectorPts[i * 4 + 1] = s * inner;
+        _clockSectorPts[i * 4 + 2] = c * tableR;
+        _clockSectorPts[i * 4 + 3] = s * tableR;
+    }
+    _clockTableR = tableR;
+}
+// Pre-rendered clock-face number labels. Saves 12 text() calls every frame.
+let _labelGfx = null, _labelGfxR = -1, _labelGfxSize = 0;
+function getLabelLayer(tableR) {
+    if (_labelGfx && _labelGfxR === tableR) return _labelGfx;
+    if (_labelGfx && _labelGfx.remove) _labelGfx.remove();
+    const padding = 30;
+    const size = Math.ceil((tableR + padding) * 2);
+    const g = createGraphics(size, size);
+    g.clear();
+    g.translate(size / 2, size / 2);
+    g.noStroke();
+    g.fill(255, 90);
+    g.textAlign(CENTER, CENTER);
+    g.textSize(11);
+    g.textStyle(BOLD);
+    const sectorWidth = (Math.PI * 2) / CLOCK_SECTORS;
+    for (let i = 0; i < CLOCK_SECTORS; i++) {
+        const a = -Math.PI / 2 + (i + 0.5) * sectorWidth;
+        g.text(CLOCK_K_VALUES[i], Math.cos(a) * (tableR + 18), Math.sin(a) * (tableR + 18));
+    }
+    _labelGfx = g;
+    _labelGfxR = tableR;
+    _labelGfxSize = size;
+    return g;
 }
 
 // Helper: p5 colour parser (reused outside p5 setup too)
@@ -258,11 +339,18 @@ function draw() {
 
     hub.x=width/2; hub.y=height/2;
 
+    // Populate frame-scoped layout cache once per frame so hot paths
+    // (distanceVelocity, hover test, character display) can reuse it.
+    const tableR = Math.min(width, height) * 0.42;
+    frameCache.tableR = tableR;
+    frameCache.tableR2 = tableR * tableR;
+    frameCache.hubX = hub.x;
+    frameCache.hubY = hub.y;
+
     // Loudness rings (subtle visual cue for distance->volume)
     push();
     stroke(255, 18); strokeWeight(1); noFill();
-    const maxR = Math.min(width, height) * 0.42;
-    for (let i=1;i<=4;i++) ellipse(hub.x, hub.y, (maxR*2) * (i/4));
+    for (let i=1;i<=4;i++) ellipse(hub.x, hub.y, (tableR*2) * (i/4));
     pop();
 
     // Clock face: angular sectors that drive Euclidean pulse count (k)
@@ -281,20 +369,50 @@ function draw() {
     for (let i=ripples.length-1;i>=0;i--) { let r=ripples[i]; noFill(); strokeWeight(r.weight); stroke(r.c[0],r.c[1],r.c[2],r.alpha); ellipse(r.x,r.y,r.size); r.size+=r.speed; r.alpha-=r.decay; r.weight*=0.95; if(r.alpha<=0) ripples.splice(i,1); }
     noStroke();
 
-    characters.forEach(c => { c.update(); c.display(); });
+    // Pick the single topmost character under the cursor (squared distance
+    // avoids a sqrt per character per frame). Skip during gestures.
+    let hovered = null;
+    if (!gestureState.active) {
+        const mx = mouseX, my = mouseY;
+        for (let i = characters.length - 1; i >= 0; i--) {
+            const c = characters[i];
+            const dx = mx - c.x, dy = my - c.y;
+            const r = c.baseSize + 30;
+            if (dx * dx + dy * dy < r * r) { hovered = c; break; }
+        }
+    }
+    frameCache.hoveredChar = hovered;
+
+    const charLen = characters.length;
+    for (let i = 0; i < charLen; i++) {
+        const c = characters[i];
+        c.update();
+        c.display();
+    }
 
     for (let i=particles.length-1;i>=0;i--) { let p=particles[i]; fill(p.c[0],p.c[1],p.c[2],p.alpha); push(); translate(p.x,p.y); rotate(p.rotation); if(p.shape==='circle') ellipse(0,0,p.size); else if(p.shape==='rect') rect(-p.size/2,-p.size/2,p.size,p.size); else triangle(-p.size/2,p.size/2,p.size/2,p.size/2,0,-p.size/2); pop(); p.x+=p.vx; p.y+=p.vy; p.vy+=0.05; p.rotation+=p.vr; p.alpha-=p.decay; p.size*=0.98; if(p.alpha<=0||p.size<0.5) particles.splice(i,1); }
 
     drawGestures();
 
+    // Icon-panel positioning: cache the DOM element + last position so we
+    // only touch style.* when something actually changed.
+    const panel = $$.iconPanel || document.getElementById('icon-panel');
     if (selectedCharacter && !gestureState.active) {
-        const panel = document.getElementById('icon-panel');
-        panel.style.display='flex';
         let tx=selectedCharacter.x, ty=selectedCharacter.y;
         if(tx>width-150) tx=selectedCharacter.x-120;
         if(ty<100) ty=100; if(ty>height-100) ty=height-100;
-        panel.style.left=tx+'px'; panel.style.top=ty+'px';
-    } else { document.getElementById('icon-panel').style.display='none'; }
+        const ix = tx | 0, iy = ty | 0;
+        if (!$$.iconPanelDisplayed) { panel.style.display = 'flex'; $$.iconPanelDisplayed = true; }
+        if (ix !== $$.iconPanelLastX || iy !== $$.iconPanelLastY) {
+            panel.style.left = ix + 'px';
+            panel.style.top  = iy + 'px';
+            $$.iconPanelLastX = ix;
+            $$.iconPanelLastY = iy;
+        }
+    } else if ($$.iconPanelDisplayed) {
+        panel.style.display = 'none';
+        $$.iconPanelDisplayed = false;
+    }
 
     // Camera detection tick (independent of frame rate)
     cameraDetectFrame(performance.now());
@@ -433,17 +551,24 @@ function triggerPad(x,y,isDrag=false) {
 
 // Distance-as-volume: closer to hub center = louder
 function distanceVelocity(x, y) {
-    const maxR = Math.min(width, height) * 0.42;
-    const d = Math.sqrt((x - hub.x)**2 + (y - hub.y)**2);
-    const t = Math.max(0, Math.min(1, d / maxR));
+    const maxR = frameCache.tableR || Math.min(width, height) * 0.42;
+    const dx = x - hub.x, dy = y - hub.y;
+    const d2 = dx * dx + dy * dy;
+    const t = d2 >= maxR * maxR ? 1 : Math.sqrt(d2) / maxR;
     return Math.max(0.15, Math.pow(1 - t, 1.5));
 }
 
 // Draw the clock face — sector lines + k labels around the playable circle.
 // Highlights the active sector for the selected character.
+//
+// Hot-path note: sector line endpoints are cached in `_clockSectorPts` and only
+// rebuilt when tableR changes (window resize). The 12 numeric labels are baked
+// into an offscreen p5.Graphics layer (`getLabelLayer`) so we replace 12
+// text() calls per frame with one image() blit.
 function drawClockFace() {
-    const tableR = Math.min(width, height) * 0.42;
-    const sectorWidth = TWO_PI / CLOCK_SECTORS;
+    const tableR = frameCache.tableR;
+    if (tableR !== _clockTableR) rebuildClockGeometry(tableR);
+    const sectorWidth = (Math.PI * 2) / CLOCK_SECTORS;
     push(); translate(hub.x, hub.y);
 
     if (selectedCharacter) {
@@ -463,32 +588,21 @@ function drawClockFace() {
     }
 
     stroke(255, 32); strokeWeight(1);
+    const pts = _clockSectorPts;
     for (let i = 0; i < CLOCK_SECTORS; i++) {
-        const a = -HALF_PI + i * sectorWidth;
-        const x1 = Math.cos(a) * (hub.radius + 8);
-        const y1 = Math.sin(a) * (hub.radius + 8);
-        const x2 = Math.cos(a) * tableR;
-        const y2 = Math.sin(a) * tableR;
-        line(x1, y1, x2, y2);
+        const o = i * 4;
+        line(pts[o], pts[o + 1], pts[o + 2], pts[o + 3]);
     }
-
-    noStroke();
-    fill(255, 90);
-    textAlign(CENTER, CENTER);
-    textSize(11);
-    textStyle(BOLD);
-    for (let i = 0; i < CLOCK_SECTORS; i++) {
-        const a = -HALF_PI + (i + 0.5) * sectorWidth;
-        const lx = Math.cos(a) * (tableR + 18);
-        const ly = Math.sin(a) * (tableR + 18);
-        text(CLOCK_K_VALUES[i], lx, ly);
-    }
-    textStyle(NORMAL);
-
     pop();
+
+    // Blit the pre-rendered label sprite once instead of 12 text() calls.
+    const labels = getLabelLayer(tableR);
+    image(labels, hub.x - _labelGfxSize / 2, hub.y - _labelGfxSize / 2);
 }
 
 function setupOriginalUI() {
+    // Cache DOM nodes hit every frame so draw() doesn't re-query them.
+    $$.iconPanel = document.getElementById('icon-panel');
     document.getElementById('mode-btn').onclick=()=>{
         setMode(currentMode+1);
     };
@@ -762,6 +876,9 @@ async function useIphone() {
     console.warn('[camera] iPhone not detected after polling. Visible cameras:', lastSeenLabels);
 }
 
+// Writes [h, s, v] into a reusable scratch buffer to avoid allocating a new
+// array per pixel sample (~4800 samples per camera detect tick).
+const _hsvOut = new Float32Array(3);
 function rgb2hsv(r, g, b) {
     r/=255; g/=255; b/=255;
     const max = Math.max(r,g,b), min = Math.min(r,g,b), d = max - min;
@@ -772,7 +889,10 @@ function rgb2hsv(r, g, b) {
         else h = (r - g)/d + 4;
         h *= 60; if (h < 0) h += 360;
     }
-    return [h, max === 0 ? 0 : d/max, max];
+    _hsvOut[0] = h;
+    _hsvOut[1] = max === 0 ? 0 : d/max;
+    _hsvOut[2] = max;
+    return _hsvOut;
 }
 
 function cameraDetectFrame(now) {
@@ -793,56 +913,66 @@ function cameraDetectFrame(now) {
     } catch (e) { return; }
     const data = ctx.getImageData(0, 0, w, h).data;
 
-    const CELL = 3;
-    const cols = w/CELL, rows = h/CELL;
-    const grid = new Int8Array(cols * rows);
-    const TYPE_IDX = { red:1, orange:2, yellow:3, green:4, blue:5, purple:6 };
-    const IDX_TYPE = ['','red','orange','yellow','green','blue','purple'];
-    for (let r=0;r<rows;r++) for (let c=0;c<cols;c++) {
-        const px = c*CELL+(CELL>>1), py = r*CELL+(CELL>>1);
-        const i = (py*w+px)<<2;
-        const [hh,ss,vv] = rgb2hsv(data[i], data[i+1], data[i+2]);
-        let t = 0;
-        for (const range of HSV_RANGES) if (range.test(hh,ss,vv)) { t = TYPE_IDX[range.type]; break; }
-        grid[r*cols+c] = t;
+    const CELL = _DETECT_CELL;
+    const cols = _DETECT_COLS, rows = _DETECT_ROWS;
+    const grid = _detectGrid;
+    const visited = _detectVisited;
+    const stack = _detectStack;
+    visited.fill(0);
+    const ranges = HSV_RANGES;
+    const rangeLen = ranges.length;
+    for (let r = 0; r < rows; r++) {
+        const py = r * CELL + (CELL >> 1);
+        const rowBase = py * w;
+        for (let c = 0; c < cols; c++) {
+            const px = c * CELL + (CELL >> 1);
+            const i = (rowBase + px) << 2;
+            const hsv = rgb2hsv(data[i], data[i + 1], data[i + 2]);
+            const hh = hsv[0], ss = hsv[1], vv = hsv[2];
+            let t = 0;
+            for (let ri = 0; ri < rangeLen; ri++) {
+                const range = ranges[ri];
+                if (range.test(hh, ss, vv)) { t = _COLOR_TYPE_IDX[range.type]; break; }
+            }
+            grid[r * cols + c] = t;
+        }
     }
 
-    // Connected components per color
-    const visited = new Uint8Array(cols*rows);
     const blobs = [];
-    const stack = [];
-    for (let r=0;r<rows;r++) for (let c=0;c<cols;c++) {
-        const idx = r*cols+c;
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+        const idx = r * cols + c;
         if (visited[idx] || grid[idx] === 0) continue;
         const t = grid[idx];
-        let sumX=0, sumY=0, count=0;
-        stack.length = 0; stack.push(idx); visited[idx]=1;
-        while (stack.length) {
-            const k = stack.pop();
-            const kr = (k/cols)|0, kc = k - kr*cols;
+        let sumX = 0, sumY = 0, count = 0;
+        let sp = 0;
+        stack[sp++] = idx;
+        visited[idx] = 1;
+        while (sp > 0) {
+            const k = stack[--sp];
+            const kr = (k / cols) | 0;
+            const kc = k - kr * cols;
             sumX += kc; sumY += kr; count++;
-            const ns = [
-                kr>0 ? k-cols : -1,
-                kr<rows-1 ? k+cols : -1,
-                kc>0 ? k-1 : -1,
-                kc<cols-1 ? k+1 : -1
-            ];
-            for (let n=0;n<4;n++) { const nk=ns[n];
-                if (nk>=0 && !visited[nk] && grid[nk]===t) { visited[nk]=1; stack.push(nk); } }
+            if (kr > 0) { const nk = k - cols; if (!visited[nk] && grid[nk] === t) { visited[nk] = 1; stack[sp++] = nk; } }
+            if (kr < rows - 1) { const nk = k + cols; if (!visited[nk] && grid[nk] === t) { visited[nk] = 1; stack[sp++] = nk; } }
+            if (kc > 0) { const nk = k - 1; if (!visited[nk] && grid[nk] === t) { visited[nk] = 1; stack[sp++] = nk; } }
+            if (kc < cols - 1) { const nk = k + 1; if (!visited[nk] && grid[nk] === t) { visited[nk] = 1; stack[sp++] = nk; } }
         }
-        const blobType = IDX_TYPE[t];
+        const blobType = _COLOR_IDX_TYPE[t];
         const minCells = COLOR_MIN_BLOB_CELLS[blobType] || MIN_BLOB_CELLS;
-        if (count >= minCells) blobs.push({ type: blobType, cx: sumX/count, cy: sumY/count, count });
+        if (count >= minCells) blobs.push({ type: blobType, cx: sumX / count, cy: sumY / count, count });
     }
 
-    // Map normalized blob positions to canvas coords centered on hub
-    const tableR = Math.min(width, height) * 0.42;
-    const detected = blobs.map(b => ({
-        type: b.type,
-        x: hub.x + (b.cx/cols - 0.5) * tableR * 2.0,
-        y: hub.y + (b.cy/rows - 0.5) * tableR * 2.0,
-        count: b.count
-    }));
+    const tableR = frameCache.tableR || Math.min(width, height) * 0.42;
+    const detected = new Array(blobs.length);
+    for (let i = 0; i < blobs.length; i++) {
+        const b = blobs[i];
+        detected[i] = {
+            type: b.type,
+            x: hub.x + (b.cx / cols - 0.5) * tableR * 2.0,
+            y: hub.y + (b.cy / rows - 0.5) * tableR * 2.0,
+            count: b.count
+        };
+    }
 
     trackCameraCharacters(detected, now);
 }
@@ -1094,7 +1224,13 @@ class Character {
         spawnRipples(this.x, this.y, this.c, 1);
     }
 
-    updateEuclidean(){this.sequence=[];for(let i=0;i<this.n;i++) this.sequence.push((i*this.k)%this.n<this.k?1:0);}
+    updateEuclidean(){
+        if (!this._seqBuf || this._seqBuf.length < this.n) this._seqBuf = new Uint8Array(Math.max(32, this.n));
+        const seq = this._seqBuf;
+        const n = this.n, k = this.k;
+        for (let i = 0; i < n; i++) seq[i] = ((i * k) % n) < k ? 1 : 0;
+        this.sequence = seq;
+    }
 
     playSound(time,step) {
         const sc=set.scale;
@@ -1142,13 +1278,27 @@ class Character {
 
     display(){
         push();translate(this.x,this.y);
-        const isHovered=dist(mouseX,mouseY,this.x,this.y)<this.baseSize+30;
+        // Hover is resolved once per frame in draw(); each character just
+        // checks pointer-equality instead of recomputing distance.
+        const isHovered = frameCache.hoveredChar === this;
         if(this.isSelected||(isHovered&&!gestureState.active)){
-            const pr=this.baseSize+25, as=TWO_PI/this.n;
+            const n = this.n, pr = this.baseSize + 25;
+            const ring = getUnitRing(n);
             stroke(this.c[0],this.c[1],this.c[2],this.active?50:20);strokeWeight(1);fill(this.c[0],this.c[1],this.c[2],this.active?10:5);
-            beginShape();for(let i=0;i<this.n;i++){const a=i*as-HALF_PI;vertex(cos(a)*pr,sin(a)*pr);}endShape(CLOSE);
-            const ls=stepCount%this.n;
-            for(let i=0;i<this.n;i++){const a=i*as-HALF_PI,px=cos(a)*pr,py=sin(a)*pr;noStroke();if(!this.active)fill(30,30,30,100);else if(this.sequence[i]===1)fill(this.c[0],this.c[1],this.c[2],200);else fill(50,50,50,150);const ns=(this.active&&i===ls)?12:6;if(this.active&&i===ls)fill(255);ellipse(px,py,ns);}
+            beginShape();
+            for(let i=0;i<n;i++) vertex(ring[i*2]*pr, ring[i*2+1]*pr);
+            endShape(CLOSE);
+            const ls = stepCount % n;
+            for(let i=0;i<n;i++){
+                const px = ring[i*2]*pr, py = ring[i*2+1]*pr;
+                noStroke();
+                if(!this.active) fill(30,30,30,100);
+                else if(this.sequence[i]===1) fill(this.c[0],this.c[1],this.c[2],200);
+                else fill(50,50,50,150);
+                const ns = (this.active && i===ls) ? 12 : 6;
+                if(this.active && i===ls) fill(255);
+                ellipse(px,py,ns);
+            }
             if(this.isSelected){noFill();stroke(255,150);strokeWeight(2);drawingContext.setLineDash([5,5]);ellipse(0,0,pr*2+20);drawingContext.setLineDash([]);}
         }
         noStroke();const al=this.active?220:80;if(!this.active)fill(60,60,60,al);else fill(this.c[0],this.c[1],this.c[2],al);
