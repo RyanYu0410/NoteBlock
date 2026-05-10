@@ -1,7 +1,7 @@
 # NoteBlock — Audiovisual Playground
 
-**Author:** _Your Name_
-**Contact:** _your.email@example.com_
+**Author:** Ryan Yu
+**Contact:** hryanyu@gmail.com
 
 ![NoteBlock — empty clock table](docs/screenshots/00-empty-table.png)
 
